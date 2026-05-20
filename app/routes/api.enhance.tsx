@@ -9,9 +9,28 @@
 // The new media has a different ID than the original — Shopify Files/Media
 // objects are immutable. Documented in README.
 
-import type { ActionFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 
 import { authenticate } from "../shopify.server";
+
+// CORS headers — the Admin Action extension runs on a different origin (Shopify
+// CDN) and calls this endpoint with a session token. Bearer auth means we don't
+// need cookies, so `*` is safe here.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
+// Browsers preflight cross-origin POSTs with custom headers (Authorization).
+// Reply 204 with the same CORS headers so the real POST is allowed through.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  return new Response("Method Not Allowed", { status: 405 });
+};
 import {
   downloadRenderedImage,
   imageUrlToDataUrl,
@@ -211,6 +230,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...CORS_HEADERS,
+    },
   });
 }

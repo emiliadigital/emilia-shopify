@@ -1,0 +1,12 @@
+{
+  "name": "Enhance with Emilia AI",
+  "heading": "Enhance product image",
+  "select_image": "Select the image to enhance",
+  "no_images": "This product has no images yet.",
+  "enhance": "Enhance",
+  "enhancing": "Enhancing…",
+  "cancel": "Cancel",
+  "missing_key": "Configure your Emilia API key in the app's Settings page first.",
+  "success": "Image enhanced and replaced.",
+  "failed": "Enhance failed:"
+}
