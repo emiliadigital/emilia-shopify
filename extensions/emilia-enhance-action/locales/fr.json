@@ -1,4 +1,12 @@
 {
-  "name": "emilia-enhance-action",
-  "welcome": "Bienvenue dans l'extension {{target}}!"
+  "name": "Améliorer avec Emilia AI",
+  "heading": "Améliorer l'image du produit",
+  "select_image": "Sélectionnez l'image à améliorer",
+  "no_images": "Ce produit n'a pas encore d'images.",
+  "enhance": "Améliorer",
+  "enhancing": "Amélioration en cours…",
+  "cancel": "Annuler",
+  "missing_key": "Configurez d'abord votre clé API Emilia dans les paramètres de l'application.",
+  "success": "Image améliorée et remplacée.",
+  "failed": "Échec de l'amélioration :"
 }
