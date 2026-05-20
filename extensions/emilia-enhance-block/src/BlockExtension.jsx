@@ -51,8 +51,11 @@ function Extension() {
           body: JSON.stringify(query),
         });
         const json = await res.json();
+        // Show every media that has a renderable URL. Don't gate on status —
+        // we'd rather render the thumbnail and let /api/enhance return a
+        // proper error if the bytes aren't fetchable yet.
         const nodes = (json?.data?.product?.media?.nodes || []).filter(
-          (n) => n.image?.url && n.status === "READY",
+          (n) => n.image?.url,
         );
         setMediaList(nodes);
       } catch {
@@ -69,7 +72,7 @@ function Extension() {
     updateStatus(mediaId, { state: "busy", error: null });
 
     try {
-      const token = await shopify.idToken();
+      const token = await shopify.auth.idToken();
       const formData = new FormData();
       formData.append("productId", productId);
       formData.append("mediaId", mediaId);

@@ -66,10 +66,11 @@ function Extension() {
         return;
       }
 
-      // Keep only ready image media
-      p.media.nodes = p.media.nodes.filter(
-        (n) => n.image?.url && n.status === "READY",
-      );
+      // Keep anything that has a renderable image URL.  Don't gate on
+      // status — some shops report MediaImage status differently and we'd
+      // rather show the thumbnail and let /api/enhance return a clean error
+      // if Shopify can't fetch the bytes.
+      p.media.nodes = p.media.nodes.filter((n) => n.image?.url);
       setProduct(p);
       if (p.media.nodes[0]) setSelectedMediaId(p.media.nodes[0].id);
     })();
@@ -83,7 +84,7 @@ function Extension() {
 
     try {
       // Session token authenticates against authenticate.admin() on the backend.
-      const token = await shopify.idToken();
+      const token = await shopify.auth.idToken();
 
       const formData = new FormData();
       formData.append("productId", productId);
