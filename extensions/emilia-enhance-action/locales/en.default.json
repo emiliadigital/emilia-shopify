@@ -1,12 +1,21 @@
 {
   "name": "Enhance with Emilia AI",
   "heading": "Enhance product image",
-  "select_image": "Select the image to enhance",
+  "select_image": "Pick the image to enhance",
   "no_images": "This product has no images yet.",
   "enhance": "Enhance",
   "enhancing": "Enhancing…",
   "cancel": "Cancel",
   "missing_key": "Configure your Emilia API key in the app's Settings page first.",
   "success": "Image enhanced and replaced.",
-  "failed": "Enhance failed:"
+  "failed": "Enhance failed:",
+  "options_heading": "Options",
+  "options_hint": "Leave blank to use your saved defaults — or change any to override for this run.",
+  "style_label": "Style",
+  "aspect_label": "Aspect ratio",
+  "resolution_label": "Resolution",
+  "presenter_label": "Presenter",
+  "default": "Default",
+  "none": "None",
+  "not_synced": "Styles & presenters haven't been synced yet. Open the app's Settings page and click \"Sync\" to enable per-run overrides."
 }

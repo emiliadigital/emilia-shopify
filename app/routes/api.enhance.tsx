@@ -89,8 +89,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     String(formData.get("aspect") ?? "") || settings.defaultAspectRatio;
   const resolution =
     String(formData.get("resolution") ?? "") || settings.defaultResolution;
+  const presenterRaw = String(formData.get("presenterId") ?? "");
+  // "__none__" is the extension's explicit "no presenter for this run" marker.
+  // Empty string = fall back to saved default. Any other value = override.
   const presenterId =
-    String(formData.get("presenterId") ?? "") || settings.defaultPresenter || "";
+    presenterRaw === "__none__"
+      ? ""
+      : presenterRaw || settings.defaultPresenter || "";
 
   if (!productId || !mediaId) {
     return json({ ok: false, error: "Missing productId or mediaId" }, 400);
