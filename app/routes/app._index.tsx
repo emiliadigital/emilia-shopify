@@ -7,7 +7,6 @@ import {
   Box,
   Button,
   Card,
-  EmptyState,
   InlineStack,
   Layout,
   Page,
@@ -101,16 +100,32 @@ function Body() {
       <Layout>
         <Layout.Section>
           <Card>
-            <EmptyState
-              heading="Connect your Emilia AI Studio account"
-              action={{ content: "Open settings", url: "/app/settings" }}
-              image="/emilia-logo.png"
-            >
-              <p>
-                Paste your <code>eak_…</code> API key to start enhancing product
-                images.
-              </p>
-            </EmptyState>
+            <Box padding="800">
+              <BlockStack gap="500" inlineAlign="center">
+                <img
+                  src="/emilia-logo.png"
+                  alt="Emilia AI Studio"
+                  style={{
+                    width: 96,
+                    height: 96,
+                    borderRadius: 16,
+                    display: "block",
+                  }}
+                />
+                <BlockStack gap="200" inlineAlign="center">
+                  <Text as="h2" variant="headingLg" alignment="center">
+                    Connect your Emilia AI Studio account
+                  </Text>
+                  <Text as="p" tone="subdued" alignment="center">
+                    Paste your <code>eak_…</code> API key to start enhancing
+                    product images.
+                  </Text>
+                </BlockStack>
+                <Button variant="primary" url="/app/settings">
+                  Open settings
+                </Button>
+              </BlockStack>
+            </Box>
           </Card>
         </Layout.Section>
       </Layout>
@@ -131,16 +146,32 @@ function Body() {
           )}
           {data.products.length === 0 ? (
             <Card>
-              <EmptyState
-                heading="No products yet"
-                action={{
-                  content: "Create a product",
-                  url: "shopify:admin/products/new",
-                }}
-                image="/emilia-logo.png"
-              >
-                <p>Create a product with images, then come back to enhance them.</p>
-              </EmptyState>
+              <Box padding="800">
+                <BlockStack gap="500" inlineAlign="center">
+                  <img
+                    src="/emilia-logo.png"
+                    alt="Emilia AI Studio"
+                    style={{
+                      width: 96,
+                      height: 96,
+                      borderRadius: 16,
+                      display: "block",
+                    }}
+                  />
+                  <BlockStack gap="200" inlineAlign="center">
+                    <Text as="h2" variant="headingLg" alignment="center">
+                      No products yet
+                    </Text>
+                    <Text as="p" tone="subdued" alignment="center">
+                      Create a product with images, then come back to enhance
+                      them.
+                    </Text>
+                  </BlockStack>
+                  <Button variant="primary" url="shopify:admin/products/new">
+                    Create a product
+                  </Button>
+                </BlockStack>
+              </Box>
             </Card>
           ) : (
             data.products.map((p) => (
