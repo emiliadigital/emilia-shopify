@@ -14,7 +14,7 @@ import {
   TextField,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { authenticate } from "../shopify.server";
 import {
@@ -142,6 +142,10 @@ export default function Settings() {
   const testFetcher = useFetcher<typeof action>();
   const syncFetcher = useFetcher<typeof action>();
 
+  // Initialize state from the loader once. Don't re-sync on every loader
+  // revalidation — Remix re-runs the loader after each action submission,
+  // and if the user has typed an API key but not yet saved it, syncing
+  // would clobber the input back to empty (because DB still says null).
   const [apiKey, setApiKey] = useState(settings.apiKey ?? "");
   const [defaultStyle, setDefaultStyle] = useState(settings.defaultStyle);
   const [defaultPresenter, setDefaultPresenter] = useState(
@@ -153,15 +157,6 @@ export default function Settings() {
   const [defaultResolution, setDefaultResolution] = useState(
     settings.defaultResolution,
   );
-
-  // Re-hydrate when loader data refreshes (after save).
-  useEffect(() => {
-    setApiKey(settings.apiKey ?? "");
-    setDefaultStyle(settings.defaultStyle);
-    setDefaultPresenter(settings.defaultPresenter ?? "");
-    setDefaultAspectRatio(settings.defaultAspectRatio);
-    setDefaultResolution(settings.defaultResolution);
-  }, [settings]);
 
   const styleOptions = (settings.config?.styles ?? [])
     .filter((s) => !REFERENCE_STYLE_IDS.has(s.id))
