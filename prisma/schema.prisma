@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// Per-shop Emilia AI Studio configuration. The shop's `eak_` API key, defaults
+// chosen in the settings page, and the platform config snapshot (styles,
+// presenters, modes, aspect ratios, resolutions, helpers) cached for 24h.
+model EmiliaShopSettings {
+  shop               String   @id
+  apiKey             String?
+  defaultStyle       String   @default("pure_white")
+  defaultPresenter   String?
+  defaultAspectRatio String   @default("1:1")
+  defaultResolution  String   @default("2K")
+  backdropColor      String   @default("#FFFFFF")
+  // JSON-encoded { [helperName]: string }
+  helpers            String   @default("{}")
+  // JSON-encoded platform config from /get-plugin-config
+  configCache        String?
+  configSyncedAt     DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

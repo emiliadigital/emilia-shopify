@@ -1,0 +1,33 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "9b69480be3682cd3fd715fb89186cff7"
+application_url = "https://emilia-shopify-app.onrender.com"
+embedded = true
+name = "Emilia AI Studio"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_products"
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+[auth]
+redirect_urls = [
+  "https://emilia-shopify-app.onrender.com/auth/callback",
+  "https://emilia-shopify-app.onrender.com/auth/shopify/callback",
+  "https://emilia-shopify-app.onrender.com/api/auth/callback"
+]
+
+[build]
+# Hosted on Render — don't let `shopify app dev` clobber our prod URLs.
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
