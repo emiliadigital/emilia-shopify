@@ -354,31 +354,21 @@ function Extension() {
   );
 }
 
-// Native HTML select — the s-select API surface varies by API version and
-// styling it in the modal context is fiddly. A native select is reliable.
+// Shopify's <s-select> + <s-option> web components — native HTML <select>
+// doesn't render inside admin extension iframes.
 function SelectRow({ label, value, onChange, defaultLabel, options }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 13, fontWeight: 500 }}>{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.currentTarget.value)}
-        style={{
-          padding: "8px 10px",
-          fontSize: 14,
-          border: "1px solid #c9cccf",
-          borderRadius: 6,
-          background: "white",
-          width: "100%",
-        }}
-      >
-        <option value="">{defaultLabel}</option>
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
+    <s-select
+      label={label}
+      value={value}
+      onChange={(e) => onChange(e.currentTarget.value)}
+    >
+      <s-option value="">{defaultLabel}</s-option>
+      {options.map((opt) => (
+        <s-option key={opt.value} value={opt.value}>
+          {opt.label}
+        </s-option>
+      ))}
+    </s-select>
   );
 }
