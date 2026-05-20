@@ -104,7 +104,7 @@ function Body() {
             <EmptyState
               heading="Connect your Emilia AI Studio account"
               action={{ content: "Open settings", url: "/app/settings" }}
-              image=""
+              image="/emilia-logo.png"
             >
               <p>
                 Paste your <code>eak_…</code> API key to start enhancing product
@@ -137,7 +137,7 @@ function Body() {
                   content: "Create a product",
                   url: "shopify:admin/products/new",
                 }}
-                image=""
+                image="/emilia-logo.png"
               >
                 <p>Create a product with images, then come back to enhance them.</p>
               </EmptyState>
