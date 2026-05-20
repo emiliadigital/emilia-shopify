@@ -17,5 +17,6 @@
   "presenter_label": "Présentateur",
   "default": "Par défaut",
   "none": "Aucun",
+  "selected": "Sélectionnée",
   "not_synced": "Les styles et présentateurs n'ont pas encore été synchronisés. Ouvrez les paramètres de l'application et cliquez sur \"Synchroniser\" pour activer les options."
 }

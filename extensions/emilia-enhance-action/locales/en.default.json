@@ -17,5 +17,6 @@
   "presenter_label": "Presenter",
   "default": "Default",
   "none": "None",
+  "selected": "Selected",
   "not_synced": "Styles & presenters haven't been synced yet. Open the app's Settings page and click \"Sync\" to enable per-run overrides."
 }

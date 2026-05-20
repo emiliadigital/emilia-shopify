@@ -202,61 +202,29 @@ function Extension() {
               {product.media.nodes.map((node) => {
                 const isSelected = selectedMediaId === node.id;
                 return (
-                  <button
+                  <s-clickable
                     key={node.id}
-                    type="button"
                     onClick={() => setSelectedMediaId(node.id)}
-                    style={{
-                      padding: 0,
-                      position: "relative",
-                      border: isSelected
-                        ? "3px solid #2c6ecb"
-                        : "3px solid #e1e3e5",
-                      borderRadius: 10,
-                      background: "transparent",
-                      cursor: "pointer",
-                      lineHeight: 0,
-                      boxShadow: isSelected
-                        ? "0 0 0 4px rgba(44,110,203,0.18)"
-                        : "none",
-                      transition: "all 120ms ease",
-                    }}
+                    border="base"
+                    borderRadius="base"
+                    borderColor={isSelected ? "info" : "subdued"}
+                    background={isSelected ? "subdued" : "transparent"}
+                    padding="extra-tight"
                   >
-                    <img
-                      src={node.image.url}
-                      alt={node.image.altText || ""}
-                      style={{
-                        width: 80,
-                        height: 80,
-                        objectFit: "cover",
-                        borderRadius: 6,
-                        display: "block",
-                        opacity: isSelected ? 1 : 0.7,
-                      }}
-                    />
-                    {isSelected && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: -8,
-                          right: -8,
-                          background: "#2c6ecb",
-                          color: "white",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          width: 22,
-                          height: 22,
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: "2px solid white",
-                        }}
-                      >
-                        ✓
-                      </div>
-                    )}
-                  </button>
+                    <s-stack direction="block" gap="extra-tight">
+                      <s-image
+                        src={node.image.url}
+                        alt={node.image.altText || ""}
+                        inlineSize="80px"
+                        aspectRatio="1"
+                        objectFit="cover"
+                        borderRadius="small-100"
+                      />
+                      {isSelected && (
+                        <s-badge tone="info">✓ {i18n.translate("selected")}</s-badge>
+                      )}
+                    </s-stack>
+                  </s-clickable>
                 );
               })}
             </s-stack>

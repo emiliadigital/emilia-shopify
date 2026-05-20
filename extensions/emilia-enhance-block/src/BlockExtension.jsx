@@ -127,47 +127,17 @@ function Extension() {
             const isError = st.state === "error";
 
             return (
-              <div
-                key={node.id}
-                style={{
-                  width: 110,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "stretch",
-                  gap: 6,
-                }}
-              >
-                <div style={{ position: "relative", lineHeight: 0 }}>
-                  <img
-                    src={displayUrl}
-                    alt={node.image.altText || ""}
-                    style={{
-                      width: 110,
-                      height: 110,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                      display: "block",
-                      opacity: isBusy ? 0.5 : 1,
-                    }}
-                  />
-                  {isDone && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 6,
-                        right: 6,
-                        background: "#008060",
-                        color: "white",
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        borderRadius: 4,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {i18n.translate("replaced")}
-                    </div>
-                  )}
-                </div>
+              <s-stack key={node.id} direction="block" gap="extra-tight">
+                <s-image
+                  src={displayUrl}
+                  alt={node.image.altText || ""}
+                  inlineSize="110px"
+                  aspectRatio="1"
+                  objectFit="cover"
+                  borderRadius="base"
+                />
+
+                {isDone && <s-badge tone="success">{i18n.translate("replaced")}</s-badge>}
 
                 <s-button
                   disabled={isBusy || isDone}
@@ -185,7 +155,7 @@ function Extension() {
                     {i18n.translate("failed")} {st.error}
                   </s-text>
                 )}
-              </div>
+              </s-stack>
             );
           })}
         </s-stack>
