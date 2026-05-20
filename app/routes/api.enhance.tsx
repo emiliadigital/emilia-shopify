@@ -23,13 +23,13 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-// Browsers preflight cross-origin POSTs with custom headers (Authorization).
-// Reply 204 with the same CORS headers so the real POST is allowed through.
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-  return new Response("Method Not Allowed", { status: 405 });
+// GET isn't supported here. Loader returns 405 with CORS headers so any
+// accidental GET still surfaces a useful response.
+export const loader = async () => {
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: CORS_HEADERS,
+  });
 };
 import {
   downloadRenderedImage,
@@ -69,6 +69,13 @@ interface MediaNode {
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // CORS preflight from admin extensions hits the action with method=OPTIONS.
+  // Answer it before authenticate.admin() — that would 401 on a credential-less
+  // preflight.
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   if (request.method !== "POST") {
     return json({ ok: false, error: "Method not allowed" }, 405);
   }

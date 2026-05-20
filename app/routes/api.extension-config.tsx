@@ -4,7 +4,7 @@
 //
 // Auth: same Bearer session token pattern as /api/enhance.
 
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/emilia-settings.server";
@@ -16,11 +16,16 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
+// Remix routes OPTIONS to the `action` export, not `loader`. We use this purely
+// for CORS preflight — the real data fetch is GET via the loader below.
+export const action = async ({ request }: ActionFunctionArgs) => {
+  return new Response(null, {
+    status: request.method === "OPTIONS" ? 204 : 405,
+    headers: CORS_HEADERS,
+  });
+};
 
+export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const settings = await getSettings(session.shop);
 
