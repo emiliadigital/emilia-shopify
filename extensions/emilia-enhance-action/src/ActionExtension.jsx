@@ -41,6 +41,10 @@ function Extension() {
   // The set of visible helpers depends on the currently selected style.
   const [helperValues, setHelperValues] = useState({});
 
+  // Active mode tab — decoupled from selected style so the user can browse
+  // categories without losing their selection.
+  const [activeMode, setActiveMode] = useState(null);
+
   // Per-media enhance status: { [mediaId]: 'busy' | 'done' | 'error' }
   const [statusByMedia, setStatusByMedia] = useState({});
   const [errorByMedia, setErrorByMedia] = useState({});
@@ -254,15 +258,22 @@ function Extension() {
     return helperStyles.includes(effectiveStyle);
   });
 
-  // One-time debug print so we can see what the backend ships and why a style
-  // produced 0 helpers. Visible in browser DevTools console.
-  if (typeof window !== "undefined" && !window.__emiliaHelpersLogged) {
-    window.__emiliaHelpersLogged = true;
-    console.log("[Emilia] config.helpers keys:", Object.keys(config.config?.helpers || {}));
-    console.log("[Emilia] effective style:", effectiveStyle, "mode:", effectiveMode);
-    console.log("[Emilia] mode helpers raw:", allModeHelpers);
-    console.log("[Emilia] applicable after filter:", applicableHelpers);
+  // Group styles by mode. Used by the tabs + card grid below.
+  const stylesByMode = {};
+  for (const s of styles) {
+    const mode = s.mode || "product";
+    if (!stylesByMode[mode]) stylesByMode[mode] = [];
+    stylesByMode[mode].push(s);
   }
+  const modeKeys = Object.keys(stylesByMode);
+  // Default the active tab to the mode of the saved default style
+  // (or first available mode).
+  const resolvedActiveMode =
+    activeMode && modeKeys.includes(activeMode)
+      ? activeMode
+      : effectiveMode && modeKeys.includes(effectiveMode)
+        ? effectiveMode
+        : modeKeys[0];
 
   const selectedCount = selectedIds.size;
   const totalCount = product.media.nodes.length;
@@ -359,13 +370,14 @@ function Extension() {
               <s-text tone="subdued">{i18n.translate("options_hint")}</s-text>
             </s-stack>
 
-            <StyleSelect
+            <StylePicker
               label={i18n.translate("style_label")}
-              defaultLabel={`${i18n.translate("default")}: ${defaultStyleName}`}
-              value={style}
-              onChange={setStyle}
-              styles={styles}
+              stylesByMode={stylesByMode}
               modes={config.config.modes || {}}
+              activeMode={resolvedActiveMode}
+              onModeChange={setActiveMode}
+              selectedStyle={style || config.defaults.style}
+              onSelectStyle={setStyle}
             />
 
             {/* DYNAMIC HELPERS — appear based on the currently selected style. */}
@@ -496,43 +508,84 @@ function Extension() {
   );
 }
 
-// Style select grouped by mode (product / food / jewelry / clothing /
-// furniture / cosmetics) via s-option-group.
-function StyleSelect({ label, defaultLabel, value, onChange, styles, modes }) {
-  const grouped = {};
-  for (const s of styles) {
-    const mode = s.mode || "product";
-    if (!grouped[mode]) grouped[mode] = [];
-    grouped[mode].push(s);
-  }
+// Tabbed style picker — one tab per mode (Product, Food, Jewelry, etc.).
+// Selecting a tab swaps the visible card grid. Clicking a card commits the
+// style choice. Selected card has a blue border + subdued background.
+function StylePicker({
+  label,
+  stylesByMode,
+  modes,
+  activeMode,
+  onModeChange,
+  selectedStyle,
+  onSelectStyle,
+}) {
+  const modeKeys = Object.keys(stylesByMode);
+  const visibleStyles = stylesByMode[activeMode] || [];
+
   return (
-    <s-stack direction="block" gap="small-500">
+    <s-stack direction="block" gap="small-300">
       <s-text tone="subdued" type="generic">
         {label}
       </s-text>
-      <s-select
-        label={label}
-        labelAccessibilityVisibility="exclusive"
-        value={value}
-        onChange={(e) => onChange(e.currentTarget.value)}
+
+      {/* Tab row — built from <s-clickable> since there's no <s-tabs> */}
+      <s-stack direction="inline" gap="small-100" inlineWrap>
+        {modeKeys.map((mode) => {
+          const isActive = mode === activeMode;
+          return (
+            <s-clickable
+              key={mode}
+              onClick={() => onModeChange(mode)}
+              padding="small-200"
+              borderRadius="base"
+              borderWidth={isActive ? "large-100" : "small-100"}
+              borderColor={isActive ? "strong" : "subdued"}
+              background={isActive ? "subdued" : "transparent"}
+            >
+              <s-text type={isActive ? "strong" : "generic"}>
+                {modes[mode]?.title ||
+                  mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </s-text>
+            </s-clickable>
+          );
+        })}
+      </s-stack>
+
+      {/* Card grid for the active mode */}
+      <s-grid
+        gridTemplateColumns="repeat(auto-fill, minmax(110px, 1fr))"
+        gap="small-200"
       >
-        <s-option value="">{defaultLabel}</s-option>
-        {Object.entries(grouped).map(([mode, modeStyles]) => (
-          <s-option-group
-            key={mode}
-            label={
-              modes[mode]?.title ||
-              mode.charAt(0).toUpperCase() + mode.slice(1)
-            }
-          >
-            {modeStyles.map((s) => (
-              <s-option key={s.id} value={s.id}>
-                {s.name}
-              </s-option>
-            ))}
-          </s-option-group>
-        ))}
-      </s-select>
+        {visibleStyles.map((s) => {
+          const isSelected = selectedStyle === s.id;
+          return (
+            <s-clickable
+              key={s.id}
+              onClick={() => onSelectStyle(s.id)}
+              padding="small-100"
+              borderRadius="base"
+              borderWidth={isSelected ? "large-100" : "small-100"}
+              borderColor={isSelected ? "strong" : "subdued"}
+              background={isSelected ? "subdued" : "transparent"}
+            >
+              <s-stack
+                direction="block"
+                gap="small-200"
+                alignItems="center"
+                justifyContent="center"
+              >
+                {s.thumbnail ? (
+                  <s-thumbnail src={s.thumbnail} alt={s.name} size="small" />
+                ) : null}
+                <s-text type={isSelected ? "strong" : "generic"}>
+                  {s.name}
+                </s-text>
+              </s-stack>
+            </s-clickable>
+          );
+        })}
+      </s-grid>
     </s-stack>
   );
 }
