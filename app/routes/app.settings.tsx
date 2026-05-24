@@ -10,7 +10,6 @@ import {
   Layout,
   Page,
   Select,
-  Tabs,
   Text,
   TextField,
 } from "@shopify/polaris";
@@ -187,12 +186,6 @@ export default function Settings() {
   const [helperValues, setHelperValues] = useState<Record<string, string>>(
     settings.helpers ?? {},
   );
-  // Active category tab — defaults to the mode of the saved default style
-  // so opening Settings lands the user where they last picked from.
-  const initialMode =
-    (settings.config?.styles ?? []).find((s) => s.id === settings.defaultStyle)
-      ?.mode ?? "product";
-  const [activeMode, setActiveMode] = useState<string>(initialMode);
 
   // Group styles by mode (product / food / jewelry / clothing / furniture /
   // cosmetics). Polaris's Select accepts a mixed array of options and
@@ -360,98 +353,82 @@ export default function Settings() {
                   <Text as="h2" variant="headingMd">
                     Defaults
                   </Text>
-                  {/* Tabs — one per mode. Selecting a tab just changes the
-                      visible card grid, NOT the saved default style (that
-                      only updates when you click a card). */}
-                  {Object.keys(stylesByMode).length > 0 && (
-                    <Tabs
-                      tabs={Object.keys(stylesByMode).map((mode) => ({
-                        id: `tab-${mode}`,
-                        content:
-                          modeTitles[mode]?.title ??
-                          mode.charAt(0).toUpperCase() + mode.slice(1),
-                        accessibilityLabel:
-                          modeTitles[mode]?.title ?? mode,
-                        panelID: `panel-${mode}`,
-                      }))}
-                      selected={Math.max(
-                        0,
-                        Object.keys(stylesByMode).indexOf(activeMode),
-                      )}
-                      onSelect={(idx) =>
-                        setActiveMode(Object.keys(stylesByMode)[idx])
-                      }
-                      fitted
-                    />
-                  )}
-
-                  {/* Card grid for the active mode */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fill, minmax(140px, 1fr))",
-                      gap: 12,
-                      marginTop: 8,
-                    }}
-                  >
-                    {(stylesByMode[activeMode] ?? []).map((opt) => {
-                      const styleObj = allStyles.find(
-                        (s) => s.id === opt.value,
-                      );
-                      const isSelected = defaultStyle === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setDefaultStyle(opt.value)}
-                          style={{
-                            padding: 8,
-                            border: isSelected
-                              ? "2px solid #2c6ecb"
-                              : "1px solid #e1e3e5",
-                            borderRadius: 12,
-                            background: isSelected ? "#f3f8ff" : "white",
-                            cursor: "pointer",
-                            textAlign: "center",
-                            transition: "all 120ms",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "100%",
-                              aspectRatio: "1",
-                              borderRadius: 8,
-                              overflow: "hidden",
-                              background: "#f6f6f7",
-                              marginBottom: 8,
-                            }}
-                          >
-                            {styleObj?.thumbnail ? (
-                              <img
-                                src={styleObj.thumbnail}
-                                alt={opt.label}
-                                loading="lazy"
+                  {/* All categories shown at once. Each has its own heading
+                      + card grid. Selected style is highlighted regardless
+                      of which category it lives in. */}
+                  {Object.entries(stylesByMode).map(([mode, opts]) => (
+                    <BlockStack gap="200" key={mode}>
+                      <Text as="h3" variant="headingSm">
+                        {modeTitles[mode]?.title ??
+                          mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      </Text>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(140px, 1fr))",
+                          gap: 12,
+                        }}
+                      >
+                        {opts.map((opt) => {
+                          const styleObj = allStyles.find(
+                            (s) => s.id === opt.value,
+                          );
+                          const isSelected = defaultStyle === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setDefaultStyle(opt.value)}
+                              style={{
+                                padding: 8,
+                                border: isSelected
+                                  ? "2px solid #2c6ecb"
+                                  : "1px solid #e1e3e5",
+                                borderRadius: 12,
+                                background: isSelected ? "#f3f8ff" : "white",
+                                cursor: "pointer",
+                                textAlign: "center",
+                                transition: "all 120ms",
+                              }}
+                            >
+                              <div
                                 style={{
                                   width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                  display: "block",
+                                  aspectRatio: "1",
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  background: "#f6f6f7",
+                                  marginBottom: 8,
                                 }}
-                              />
-                            ) : null}
-                          </div>
-                          <Text
-                            as="span"
-                            variant="bodySm"
-                            fontWeight={isSelected ? "bold" : "regular"}
-                          >
-                            {opt.label}
-                          </Text>
-                        </button>
-                      );
-                    })}
-                  </div>
+                              >
+                                {styleObj?.thumbnail ? (
+                                  <img
+                                    src={styleObj.thumbnail}
+                                    alt={opt.label}
+                                    loading="lazy"
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                      display: "block",
+                                    }}
+                                  />
+                                ) : null}
+                              </div>
+                              <Text
+                                as="span"
+                                variant="bodySm"
+                                fontWeight={isSelected ? "bold" : "regular"}
+                              >
+                                {opt.label}
+                              </Text>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </BlockStack>
+                  ))}
 
                   <FormLayout>
 

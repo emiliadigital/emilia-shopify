@@ -41,9 +41,6 @@ function Extension() {
   // The set of visible helpers depends on the currently selected style.
   const [helperValues, setHelperValues] = useState({});
 
-  // Active mode tab — decoupled from selected style so the user can browse
-  // categories without losing their selection.
-  const [activeMode, setActiveMode] = useState(null);
 
   // Per-media enhance status: { [mediaId]: 'busy' | 'done' | 'error' }
   const [statusByMedia, setStatusByMedia] = useState({});
@@ -258,22 +255,13 @@ function Extension() {
     return helperStyles.includes(effectiveStyle);
   });
 
-  // Group styles by mode. Used by the tabs + card grid below.
+  // Group styles by mode for the section-by-section picker.
   const stylesByMode = {};
   for (const s of styles) {
     const mode = s.mode || "product";
     if (!stylesByMode[mode]) stylesByMode[mode] = [];
     stylesByMode[mode].push(s);
   }
-  const modeKeys = Object.keys(stylesByMode);
-  // Default the active tab to the mode of the saved default style
-  // (or first available mode).
-  const resolvedActiveMode =
-    activeMode && modeKeys.includes(activeMode)
-      ? activeMode
-      : effectiveMode && modeKeys.includes(effectiveMode)
-        ? effectiveMode
-        : modeKeys[0];
 
   const selectedCount = selectedIds.size;
   const totalCount = product.media.nodes.length;
@@ -374,8 +362,6 @@ function Extension() {
               label={i18n.translate("style_label")}
               stylesByMode={stylesByMode}
               modes={config.config.modes || {}}
-              activeMode={resolvedActiveMode}
-              onModeChange={setActiveMode}
               selectedStyle={style || config.defaults.style}
               onSelectStyle={setStyle}
             />
@@ -508,84 +494,67 @@ function Extension() {
   );
 }
 
-// Tabbed style picker — one tab per mode (Product, Food, Jewelry, etc.).
-// Selecting a tab swaps the visible card grid. Clicking a card commits the
-// style choice. Selected card has a blue border + subdued background.
+// Style picker — shows every category as a labeled section with its card
+// grid. Selected style is highlighted no matter which section it lives in.
+// 3 cards per row inside the modal (it's narrow).
 function StylePicker({
   label,
   stylesByMode,
   modes,
-  activeMode,
-  onModeChange,
   selectedStyle,
   onSelectStyle,
 }) {
-  const modeKeys = Object.keys(stylesByMode);
-  const visibleStyles = stylesByMode[activeMode] || [];
-
   return (
-    <s-stack direction="block" gap="small-300">
+    <s-stack direction="block" gap="base">
       <s-text tone="subdued" type="generic">
         {label}
       </s-text>
 
-      {/* Tab row — built from <s-clickable> since there's no <s-tabs> */}
-      <s-stack direction="inline" gap="small-100" inlineWrap>
-        {modeKeys.map((mode) => {
-          const isActive = mode === activeMode;
-          return (
-            <s-clickable
-              key={mode}
-              onClick={() => onModeChange(mode)}
-              padding="small-200"
-              borderRadius="base"
-              borderWidth={isActive ? "large-100" : "small-100"}
-              borderColor={isActive ? "strong" : "subdued"}
-              background={isActive ? "subdued" : "transparent"}
-            >
-              <s-text type={isActive ? "strong" : "generic"}>
-                {modes[mode]?.title ||
-                  mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </s-text>
-            </s-clickable>
-          );
-        })}
-      </s-stack>
-
-      {/* Card grid for the active mode */}
-      <s-grid
-        gridTemplateColumns="repeat(auto-fill, minmax(110px, 1fr))"
-        gap="small-200"
-      >
-        {visibleStyles.map((s) => {
-          const isSelected = selectedStyle === s.id;
-          return (
-            <s-clickable
-              key={s.id}
-              onClick={() => onSelectStyle(s.id)}
-              padding="small-100"
-              borderRadius="base"
-              borderWidth={isSelected ? "large-100" : "small-100"}
-              borderColor={isSelected ? "strong" : "subdued"}
-              background={isSelected ? "subdued" : "transparent"}
-            >
-              <s-stack
-                direction="block"
-                gap="small-200"
-                alignItems="center"
-                justifyContent="center"
-              >
-                {s.thumbnail ? (
-                  <s-thumbnail src={s.thumbnail} alt={s.name} size="small" />
-                ) : null}
-                <s-text type={isSelected ? "strong" : "generic"}>
-                  {s.name}
-                </s-text>
-              </s-stack>
-            </s-clickable>
-          );
-        })}
-      </s-grid>
+      {Object.entries(stylesByMode).map(([mode, modeStyles]) => (
+        <s-stack key={mode} direction="block" gap="small-200">
+          <s-text type="strong">
+            {modes[mode]?.title ||
+              mode.charAt(0).toUpperCase() + mode.slice(1)}
+          </s-text>
+          <s-grid
+            gridTemplateColumns="repeat(3, minmax(0, 1fr))"
+            gap="small-200"
+          >
+            {modeStyles.map((s) => {
+              const isSelected = selectedStyle === s.id;
+              return (
+                <s-clickable
+                  key={s.id}
+                  onClick={() => onSelectStyle(s.id)}
+                  padding="small-100"
+                  borderRadius="base"
+                  borderWidth={isSelected ? "large-100" : "small-100"}
+                  borderColor={isSelected ? "strong" : "subdued"}
+                  background={isSelected ? "subdued" : "transparent"}
+                >
+                  <s-stack
+                    direction="block"
+                    gap="small-200"
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    {s.thumbnail ? (
+                      <s-thumbnail
+                        src={s.thumbnail}
+                        alt={s.name}
+                        size="small"
+                      />
+                    ) : null}
+                    <s-text type={isSelected ? "strong" : "generic"}>
+                      {s.name}
+                    </s-text>
+                  </s-stack>
+                </s-clickable>
+              );
+            })}
+          </s-grid>
+        </s-stack>
+      ))}
     </s-stack>
   );
 }
