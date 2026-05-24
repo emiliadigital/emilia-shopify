@@ -427,7 +427,9 @@ function Extension() {
               }))}
             />
 
-            {presenters.length > 0 && (
+            {/* Only show Presenter when the *currently selected style*
+                supports presenters. has_presenter is a flag on each style. */}
+            {presenters.length > 0 && effectiveStyleObj?.has_presenter && (
               <SelectRow
                 label={i18n.translate("presenter_label")}
                 value={presenter}

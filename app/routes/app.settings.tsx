@@ -354,14 +354,83 @@ export default function Settings() {
                     Defaults
                   </Text>
                   <FormLayout>
-                    {styleOptions.length > 0 && (
-                      <Select
-                        label="Default style"
-                        options={styleOptions}
-                        value={defaultStyle}
-                        onChange={setDefaultStyle}
-                      />
-                    )}
+                    {/* Visual style grid grouped by mode — mirrors the WP plugin. */}
+                    {stylesByMode &&
+                      Object.entries(stylesByMode).map(([mode, opts]) => (
+                        <BlockStack gap="200" key={mode}>
+                          <Text as="h3" variant="headingSm">
+                            {modeTitles[mode]?.title ??
+                              mode.charAt(0).toUpperCase() + mode.slice(1)}
+                          </Text>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                "repeat(auto-fill, minmax(140px, 1fr))",
+                              gap: 12,
+                            }}
+                          >
+                            {opts.map((opt) => {
+                              const styleObj = allStyles.find(
+                                (s) => s.id === opt.value,
+                              );
+                              const isSelected = defaultStyle === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setDefaultStyle(opt.value)}
+                                  style={{
+                                    padding: 8,
+                                    border: isSelected
+                                      ? "2px solid #2c6ecb"
+                                      : "1px solid #e1e3e5",
+                                    borderRadius: 12,
+                                    background: isSelected
+                                      ? "#f3f8ff"
+                                      : "white",
+                                    cursor: "pointer",
+                                    textAlign: "center",
+                                    transition: "all 120ms",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: "100%",
+                                      aspectRatio: "1",
+                                      borderRadius: 8,
+                                      overflow: "hidden",
+                                      background: "#f6f6f7",
+                                      marginBottom: 8,
+                                    }}
+                                  >
+                                    {styleObj?.thumbnail ? (
+                                      <img
+                                        src={styleObj.thumbnail}
+                                        alt={opt.label}
+                                        loading="lazy"
+                                        style={{
+                                          width: "100%",
+                                          height: "100%",
+                                          objectFit: "cover",
+                                          display: "block",
+                                        }}
+                                      />
+                                    ) : null}
+                                  </div>
+                                  <Text
+                                    as="span"
+                                    variant="bodySm"
+                                    fontWeight={isSelected ? "bold" : "regular"}
+                                  >
+                                    {opt.label}
+                                  </Text>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </BlockStack>
+                      ))}
 
                     {/* Style-specific helpers (shadow, angle, surface, etc.)
                         appear when the selected style declares them. Mirrors
@@ -413,14 +482,15 @@ export default function Settings() {
                       );
                     })}
 
-                    {presenterOptions.length > 1 && (
-                      <Select
-                        label="Default presenter"
-                        options={presenterOptions}
-                        value={defaultPresenter}
-                        onChange={setDefaultPresenter}
-                      />
-                    )}
+                    {presenterOptions.length > 1 &&
+                      effectiveStyleObj?.has_presenter && (
+                        <Select
+                          label="Default presenter"
+                          options={presenterOptions}
+                          value={defaultPresenter}
+                          onChange={setDefaultPresenter}
+                        />
+                      )}
                     <FormLayout.Group>
                       {aspectOptions.length > 0 && (
                         <Select
