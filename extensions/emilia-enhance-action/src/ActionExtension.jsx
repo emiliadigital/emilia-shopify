@@ -378,155 +378,170 @@ function Extension() {
   return (
     <s-admin-action heading={i18n.translate("heading")}>
       {/* FULLSCREEN VIEWER — covers the whole modal body with a big image
-          when set. Click anywhere to dismiss. */}
+          when set. Click anywhere to dismiss. Inline styles only because
+          <style> tags get sanitized in the extension sandbox. */}
       {viewer && (
-        <>
-          <style>{`
-            .emilia-viewer-overlay {
-              position: fixed;
-              inset: 0;
-              background: rgba(0, 0, 0, 0.85);
-              z-index: 9999;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              cursor: zoom-out;
-              padding: 32px;
-            }
-            .emilia-viewer-img {
-              max-width: 90vw;
-              max-height: 80vh;
-              object-fit: contain;
-              border-radius: 12px;
-              box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            }
-            .emilia-viewer-label {
-              color: white;
-              font-size: 14px;
-              margin-top: 16px;
-              opacity: 0.85;
-            }
-            .emilia-viewer-close {
-              position: absolute;
-              top: 24px;
-              right: 24px;
-              background: rgba(255,255,255,0.15);
-              color: white;
-              border: 0;
-              width: 36px;
-              height: 36px;
-              border-radius: 18px;
-              font-size: 18px;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-          `}</style>
-          <div
-            className="emilia-viewer-overlay"
-            onClick={() => setViewer(null)}
+        <div
+          onClick={() => setViewer(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "zoom-out",
+            padding: 32,
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewer(null);
+            }}
+            aria-label="Close"
+            style={{
+              position: "absolute",
+              top: 24,
+              right: 24,
+              background: "rgba(255,255,255,0.15)",
+              color: "white",
+              border: 0,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              fontSize: 18,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            <button
-              className="emilia-viewer-close"
-              onClick={(e) => {
-                e.stopPropagation();
-                setViewer(null);
+            ×
+          </button>
+          <img
+            src={viewer.src}
+            alt={viewer.label || ""}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "90vw",
+              maxHeight: "80vh",
+              objectFit: "contain",
+              borderRadius: 12,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+            }}
+          />
+          {viewer.label && (
+            <div
+              style={{
+                color: "white",
+                fontSize: 14,
+                marginTop: 16,
+                opacity: 0.85,
               }}
-              aria-label="Close"
             >
-              ×
-            </button>
-            <img
-              src={viewer.src}
-              alt={viewer.label || ""}
-              className="emilia-viewer-img"
-              onClick={(e) => e.stopPropagation()}
-            />
-            {viewer.label && (
-              <div className="emilia-viewer-label">{viewer.label}</div>
-            )}
-          </div>
-        </>
+              {viewer.label}
+            </div>
+          )}
+        </div>
       )}
 
       <s-stack direction="block" gap="large-100">
         <s-heading>{product.title}</s-heading>
 
-        {/* RENDERING OVERLAY — animated spinner ring around the Emilia logo. */}
+        {/* RENDERING OVERLAY — SVG SMIL-animated ring around the Emilia logo.
+            <style> tags get sanitized by the extension sandbox, so we use
+            inline styles + SVG's built-in animation. */}
         {phase === "rendering" && (
-          <>
-            <style>{`
-              @keyframes emilia-spin {
-                from { transform: rotate(0deg); }
-                to   { transform: rotate(360deg); }
-              }
-              @keyframes emilia-pulse {
-                0%, 100% { transform: scale(1); }
-                50%      { transform: scale(1.04); }
-              }
-              .emilia-spinner {
-                position: relative;
-                width: 140px;
-                height: 140px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0 auto;
-              }
-              .emilia-spinner-ring {
-                position: absolute;
-                inset: 0;
-                border: 4px solid rgba(0, 0, 0, 0.08);
-                border-top-color: #00C39A;
-                border-right-color: #00C39A;
-                border-radius: 50%;
-                animation: emilia-spin 1.1s linear infinite;
-              }
-              .emilia-spinner-logo {
-                width: 96px;
-                height: 96px;
-                border-radius: 16px;
-                background: #0E1B2C;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                overflow: hidden;
-                animation: emilia-pulse 2s ease-in-out infinite;
-              }
-              .emilia-spinner-logo img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                display: block;
-              }
-            `}</style>
-            <s-stack
-              direction="block"
-              gap="base"
-              alignItems="center"
-              justifyContent="center"
-              padding="large-100"
+          <s-stack
+            direction="block"
+            gap="base"
+            alignItems="center"
+            justifyContent="center"
+            padding="large-100"
+          >
+            <div
+              style={{
+                position: "relative",
+                width: 140,
+                height: 140,
+                margin: "0 auto",
+              }}
             >
-              <div className="emilia-spinner">
-                <div className="emilia-spinner-ring"></div>
-                <div className="emilia-spinner-logo">
-                  <img
-                    src={`${BACKEND_URL}/emilia-logo.png`}
-                    alt="Emilia AI Studio"
+              {/* Animated ring */}
+              <svg
+                width="140"
+                height="140"
+                viewBox="0 0 140 140"
+                style={{ position: "absolute", inset: 0 }}
+              >
+                <circle
+                  cx="70"
+                  cy="70"
+                  r="64"
+                  fill="none"
+                  stroke="rgba(0,0,0,0.08)"
+                  strokeWidth="5"
+                />
+                <circle
+                  cx="70"
+                  cy="70"
+                  r="64"
+                  fill="none"
+                  stroke="#00C39A"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray="120 402"
+                  transform="rotate(-90 70 70)"
+                >
+                  <animateTransform
+                    attributeName="transform"
+                    type="rotate"
+                    from="0 70 70"
+                    to="360 70 70"
+                    dur="1.1s"
+                    repeatCount="indefinite"
                   />
-                </div>
+                </circle>
+              </svg>
+              {/* Emilia logo centered inside the ring */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 22,
+                  left: 22,
+                  width: 96,
+                  height: 96,
+                  borderRadius: 16,
+                  background: "#0E1B2C",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <img
+                  src={`${BACKEND_URL}/emilia-logo.png`}
+                  alt="Emilia AI Studio"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
               </div>
-              <s-heading>{i18n.translate("rendering_heading")}</s-heading>
-              <s-text tone="subdued">
-                {i18n.translate("rendering_progress")
-                  .replace("{done}", Object.keys(renderResults).length)
-                  .replace("{total}", selectedCount)}
-              </s-text>
-              <s-text tone="subdued">{i18n.translate("rendering_wait")}</s-text>
-            </s-stack>
-          </>
+            </div>
+            <s-heading>{i18n.translate("rendering_heading")}</s-heading>
+            <s-text tone="subdued">
+              {i18n.translate("rendering_progress")
+                .replace("{done}", Object.keys(renderResults).length)
+                .replace("{total}", selectedCount)}
+            </s-text>
+            <s-text tone="subdued">{i18n.translate("rendering_wait")}</s-text>
+          </s-stack>
         )}
 
         {/* REVIEW PHASE — show original vs new, per image, with Replace btn. */}
