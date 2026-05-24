@@ -21,10 +21,14 @@ export default function App() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
-        <Link to="/app/settings" rel="home">
-          Settings
+        {/* rel="home" on /app — which redirects to /app/settings — so the
+            app entry in Shopify's sidebar lands on Settings by default
+            while both sub-pages remain visible. */}
+        <Link to="/app" rel="home">
+          Emilia AI Studio
         </Link>
-        <Link to="/app">Bulk Enhancement</Link>
+        <Link to="/app/settings">Settings</Link>
+        <Link to="/app/bulk">Bulk Enhancement</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>
