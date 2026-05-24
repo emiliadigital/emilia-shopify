@@ -359,12 +359,13 @@ function Extension() {
               <s-text tone="subdued">{i18n.translate("options_hint")}</s-text>
             </s-stack>
 
-            <SelectRow
+            <StyleSelect
               label={i18n.translate("style_label")}
+              defaultLabel={`${i18n.translate("default")}: ${defaultStyleName}`}
               value={style}
               onChange={setStyle}
-              defaultLabel={`${i18n.translate("default")}: ${defaultStyleName}`}
-              options={styles.map((s) => ({ value: s.id, label: s.name }))}
+              styles={styles}
+              modes={config.config.modes || {}}
             />
 
             {/* DYNAMIC HELPERS — appear based on the currently selected style. */}
@@ -490,6 +491,47 @@ function Extension() {
         {overallDone ? i18n.translate("close") : i18n.translate("cancel")}
       </s-button>
     </s-admin-action>
+  );
+}
+
+// Style select grouped by mode (product / food / jewelry / clothing /
+// furniture / cosmetics) via s-option-group.
+function StyleSelect({ label, defaultLabel, value, onChange, styles, modes }) {
+  const grouped = {};
+  for (const s of styles) {
+    const mode = s.mode || "product";
+    if (!grouped[mode]) grouped[mode] = [];
+    grouped[mode].push(s);
+  }
+  return (
+    <s-stack direction="block" gap="small-500">
+      <s-text tone="subdued" type="generic">
+        {label}
+      </s-text>
+      <s-select
+        label={label}
+        labelAccessibilityVisibility="exclusive"
+        value={value}
+        onChange={(e) => onChange(e.currentTarget.value)}
+      >
+        <s-option value="">{defaultLabel}</s-option>
+        {Object.entries(grouped).map(([mode, modeStyles]) => (
+          <s-option-group
+            key={mode}
+            label={
+              modes[mode]?.title ||
+              mode.charAt(0).toUpperCase() + mode.slice(1)
+            }
+          >
+            {modeStyles.map((s) => (
+              <s-option key={s.id} value={s.id}>
+                {s.name}
+              </s-option>
+            ))}
+          </s-option-group>
+        ))}
+      </s-select>
+    </s-stack>
   );
 }
 

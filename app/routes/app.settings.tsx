@@ -165,12 +165,21 @@ export default function Settings() {
     settings.defaultResolution,
   );
 
-  const styleOptions = (settings.config?.styles ?? [])
-    .filter((s) => !REFERENCE_STYLE_IDS.has(s.id))
-    .map((s) => ({
-      label: `${s.name} (${s.mode ?? "product"})`,
-      value: s.id,
-    }));
+  // Group styles by mode (product / food / jewelry / clothing / furniture /
+  // cosmetics). Polaris's Select accepts a mixed array of options and
+  // { title, options: [...] } group descriptors.
+  const stylesByMode: Record<string, { label: string; value: string }[]> = {};
+  for (const s of settings.config?.styles ?? []) {
+    if (REFERENCE_STYLE_IDS.has(s.id)) continue;
+    const mode = s.mode ?? "product";
+    if (!stylesByMode[mode]) stylesByMode[mode] = [];
+    stylesByMode[mode].push({ label: s.name, value: s.id });
+  }
+  const modeTitles = settings.config?.modes ?? {};
+  const styleOptions = Object.entries(stylesByMode).map(([mode, opts]) => ({
+    title: modeTitles[mode]?.title ?? mode.charAt(0).toUpperCase() + mode.slice(1),
+    options: opts,
+  }));
 
   const presenterOptions = [
     { label: "— None —", value: "" },
