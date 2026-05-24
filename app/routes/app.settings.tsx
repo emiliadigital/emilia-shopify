@@ -86,9 +86,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         } presenters.`,
       );
     } catch (err) {
-      const message =
-        err instanceof EmiliaApiError ? err.message : "Failed to sync.";
-      return result(false, undefined, message);
+      // Surface the actual error message instead of a generic "Failed to sync."
+      // so it's easier to debug platform/DB issues from the UI itself.
+      const detail =
+        err instanceof EmiliaApiError
+          ? err.message
+          : err instanceof Error
+            ? `${err.name}: ${err.message}`
+            : String(err);
+      console.error("[Emilia] sync-config failed:", err);
+      return result(false, undefined, `Failed to sync — ${detail}`);
     }
   }
 

@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "9b69480be3682cd3fd715fb89186cff7"
-application_url = "https://emilia-shopify.onrender.com"
+application_url = "https://shopify.emilia.digital"
 embedded = true
 name = "Emilia AI Studio"
 
@@ -22,9 +22,9 @@ api_version = "2026-07"
 
 [auth]
 redirect_urls = [
-  "https://emilia-shopify.onrender.com/auth/callback",
-  "https://emilia-shopify.onrender.com/auth/shopify/callback",
-  "https://emilia-shopify.onrender.com/api/auth/callback"
+  "https://shopify.emilia.digital/auth/callback",
+  "https://shopify.emilia.digital/auth/shopify/callback",
+  "https://shopify.emilia.digital/api/auth/callback"
 ]
 
 [build]
