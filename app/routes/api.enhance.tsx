@@ -23,9 +23,12 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-// GET isn't supported here. Loader returns 405 with CORS headers so any
-// accidental GET still surfaces a useful response.
-export const loader = async () => {
+// Remix routes OPTIONS to the loader (not the action), so the CORS preflight
+// check must live here too. GET still 405s.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
   return new Response("Method Not Allowed", {
     status: 405,
     headers: CORS_HEADERS,

@@ -26,6 +26,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // OPTIONS preflight is routed here too — answer it before authenticate.admin
+  // which would otherwise 401 a credential-less preflight.
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const { session } = await authenticate.admin(request);
   const settings = await getSettings(session.shop);
 

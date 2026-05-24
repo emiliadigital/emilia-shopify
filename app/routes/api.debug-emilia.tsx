@@ -22,6 +22,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
   const { session } = await authenticate.admin(request);
   const apiKey = await getApiKey(session.shop);
 
