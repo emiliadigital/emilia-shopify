@@ -260,6 +260,16 @@ function Extension() {
             newImageUrl: json.newImageUrl,
           },
         }));
+        // Toast + auto-close so Shopify Admin re-fetches the product's media.
+        if (shopify.toast?.show) {
+          shopify.toast.show(
+            mode === "add"
+              ? i18n.translate("added")
+              : i18n.translate("replaced"),
+          );
+        }
+        // Give the user a moment to see the success badge before closing.
+        setTimeout(() => shopify.close(), 1500);
       }
     } catch (err) {
       setReplaceStatus((prev) => ({
@@ -403,8 +413,8 @@ function Extension() {
   return (
     <s-admin-action heading={i18n.translate("heading")}>
       {/* IN-MODAL IMAGE VIEWER — swaps the modal body when a thumbnail
-          is clicked. position:fixed doesn't escape Shopify's iframe
-          sandbox, so we render inline and let it take over the modal. */}
+          is clicked. Open the image in a fresh tab if the user wants
+          a true fullscreen view (browser handles native scaling). */}
       {viewer ? (
         <s-stack
           direction="block"
@@ -422,42 +432,30 @@ function Extension() {
             <s-text type="strong">
               {viewer.label || i18n.translate("preview")}
             </s-text>
-            <s-button onClick={() => setViewer(null)}>
-              {i18n.translate("close_preview")}
-            </s-button>
+            <s-stack direction="inline" gap="small-200">
+              <s-button
+                onClick={() => window.open(viewer.src, "_blank")}
+              >
+                {i18n.translate("open_in_tab")}
+              </s-button>
+              <s-button onClick={() => setViewer(null)} variant="primary">
+                {i18n.translate("close_preview")}
+              </s-button>
+            </s-stack>
           </s-stack>
-          <div
-            style={{
-              width: "100%",
-              maxHeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "#f6f6f7",
-              borderRadius: 12,
-              padding: 16,
-              overflow: "hidden",
-            }}
-          >
-            <img
-              src={viewer.src}
-              alt={viewer.label || ""}
-              style={{
-                maxWidth: "100%",
-                maxHeight: 560,
-                objectFit: "contain",
-                borderRadius: 8,
-              }}
-            />
-          </div>
+          <s-thumbnail src={viewer.src} alt={viewer.label || ""} size="large-100" />
+          <s-text tone="subdued">
+            {i18n.translate("preview_hint")}
+          </s-text>
         </s-stack>
       ) : (
       <s-stack direction="block" gap="large-100">
         <s-heading>{product.title}</s-heading>
 
-        {/* RENDERING OVERLAY — SVG SMIL-animated ring around the Emilia logo.
-            <style> tags get sanitized by the extension sandbox, so we use
-            inline styles + SVG's built-in animation. */}
+        {/* RENDERING OVERLAY. The sandbox sometimes strips raw <img>/<div>
+            with absolute positioning, so we use s-thumbnail (proven to
+            render) for the logo and a small SVG spinner below it. SVG
+            attributes (no @keyframes) are driven from React state. */}
         {phase === "rendering" && (
           <s-stack
             direction="block"
@@ -466,71 +464,32 @@ function Extension() {
             justifyContent="center"
             padding="large-100"
           >
-            <div
-              style={{
-                position: "relative",
-                width: 140,
-                height: 140,
-                margin: "0 auto",
-              }}
-            >
-              {/* Static gray ring + rotated green arc (rotation driven from
-                  React state, since SVG SMIL and CSS animations don't run
-                  in the extension sandbox). */}
-              <svg
-                width="140"
-                height="140"
-                viewBox="0 0 140 140"
-                style={{ position: "absolute", inset: 0 }}
-              >
-                <circle
-                  cx="70"
-                  cy="70"
-                  r="64"
-                  fill="none"
-                  stroke="rgba(0,0,0,0.10)"
-                  strokeWidth="6"
-                />
-                <circle
-                  cx="70"
-                  cy="70"
-                  r="64"
-                  fill="none"
-                  stroke="#00C39A"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  strokeDasharray="120 402"
-                  transform={`rotate(${spinDeg - 90} 70 70)`}
-                />
-              </svg>
-              {/* Emilia logo centered inside the ring */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 22,
-                  left: 22,
-                  width: 96,
-                  height: 96,
-                  borderRadius: 16,
-                  background: "#0E1B2C",
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <img
-                  src={`${BACKEND_URL}/emilia-logo.png`}
-                  alt="Emilia AI Studio"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                />
-              </div>
-            </div>
+            <s-thumbnail
+              src={`${BACKEND_URL}/emilia-logo.png`}
+              alt="Emilia AI Studio"
+              size="large-100"
+            />
+            <svg width="40" height="40" viewBox="0 0 40 40">
+              <circle
+                cx="20"
+                cy="20"
+                r="16"
+                fill="none"
+                stroke="rgba(0,0,0,0.12)"
+                strokeWidth="4"
+              />
+              <circle
+                cx="20"
+                cy="20"
+                r="16"
+                fill="none"
+                stroke="#00C39A"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray="40 100"
+                transform={`rotate(${spinDeg - 90} 20 20)`}
+              />
+            </svg>
             <s-heading>{i18n.translate("rendering_heading")}</s-heading>
             <s-text tone="subdued">
               {i18n.translate("rendering_progress")
@@ -850,7 +809,7 @@ function Extension() {
         </s-button>
       )}
 
-      <s-button slot="secondary-actions" onClick={close}>
+      <s-button slot="secondary-actions" onClick={() => shopify.close()}>
         {phase === "review"
           ? i18n.translate("close")
           : i18n.translate("cancel")}
@@ -859,27 +818,15 @@ function Extension() {
   );
 }
 
-// Click-to-zoom preview tile used in the review phase. Uses a plain <img>
-// so we can size it bigger than s-thumbnail allows.
+// Click-to-zoom preview tile used in the review phase.
+// Uses s-thumbnail (proven to render in the sandbox) at the largest preset.
 function PreviewImage({ src, label, onZoom }) {
   if (!src) return null;
   return (
     <s-stack direction="block" gap="extra-tight" alignItems="center">
       <s-text tone="subdued">{label}</s-text>
-      <s-clickable onClick={onZoom} borderRadius="base">
-        <img
-          src={src}
-          alt={label}
-          style={{
-            width: "100%",
-            maxWidth: 220,
-            aspectRatio: "1",
-            objectFit: "cover",
-            borderRadius: 12,
-            display: "block",
-            cursor: "zoom-in",
-          }}
-        />
+      <s-clickable onClick={onZoom}>
+        <s-thumbnail src={src} alt={label} size="large-100" />
       </s-clickable>
       <s-text tone="subdued" type="generic">
         click to view larger

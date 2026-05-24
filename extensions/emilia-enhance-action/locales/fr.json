@@ -41,5 +41,7 @@
   "adding": "Ajout…",
   "added": "Ajoutée",
   "preview": "Aperçu",
-  "close_preview": "Retour aux résultats"
+  "close_preview": "Retour aux résultats",
+  "open_in_tab": "Ouvrir dans un nouvel onglet",
+  "preview_hint": "Cliquez sur \"Ouvrir dans un nouvel onglet\" pour un véritable plein écran."
 }

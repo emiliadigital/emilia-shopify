@@ -41,5 +41,7 @@
   "adding": "Adding…",
   "added": "Added",
   "preview": "Preview",
-  "close_preview": "Back to results"
+  "close_preview": "Back to results",
+  "open_in_tab": "Open in new tab",
+  "preview_hint": "Click \"Open in new tab\" for a true fullscreen view."
 }
