@@ -65,6 +65,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const productId = String(formData.get("productId") ?? "");
   const mediaId = String(formData.get("mediaId") ?? "");
   const renderedDataUrl = String(formData.get("renderedDataUrl") ?? "");
+  // mode: 'replace' (default) deletes the original after attaching; 'add'
+  // keeps the original and just appends the new image to the product gallery.
+  const mode = String(formData.get("mode") ?? "replace") === "add" ? "add" : "replace";
 
   if (!productId || !mediaId || !renderedDataUrl) {
     return json(
@@ -129,25 +132,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  // Move into original's slot.
-  try {
-    await reorderMediaToIndex(admin, productId, uploaded.mediaId, originalIndex);
-  } catch (err) {
-    console.warn(
-      "[Emilia] reorder failed:",
-      err instanceof Error ? err.message : err,
-    );
+  if (mode === "replace") {
+    // Move new media into the old slot, then delete the old.
+    try {
+      await reorderMediaToIndex(admin, productId, uploaded.mediaId, originalIndex);
+    } catch (err) {
+      console.warn(
+        "[Emilia] reorder failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+    try {
+      await deleteProductMedia(admin, productId, [mediaId]);
+    } catch (err) {
+      console.warn(
+        "[Emilia] delete-old failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
-
-  // Delete the original.
-  try {
-    await deleteProductMedia(admin, productId, [mediaId]);
-  } catch (err) {
-    console.warn(
-      "[Emilia] delete-old failed:",
-      err instanceof Error ? err.message : err,
-    );
-  }
+  // mode === 'add' → leave the original alone, leave the new at end.
 
   return json({
     ok: true,

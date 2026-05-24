@@ -61,6 +61,22 @@ function Extension() {
   // { src: string, label?: string } | null
   const [viewer, setViewer] = useState(null);
 
+  // JS-driven spinner rotation — SVG SMIL and CSS animations get stripped by
+  // the extension sandbox, so we tick a state ourselves via requestAnimationFrame.
+  const [spinDeg, setSpinDeg] = useState(0);
+  useEffect(() => {
+    if (phase !== "rendering") return;
+    let rafId;
+    let start;
+    const tick = (t) => {
+      if (!start) start = t;
+      setSpinDeg((((t - start) * 360) / 1100) % 360);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [phase]);
+
   // Load product + config in parallel
   useEffect(() => {
     if (!productId) return;
@@ -199,14 +215,15 @@ function Extension() {
     setPhase("review");
   };
 
-  // Phase 2: user clicked Replace on one (or all) of the previewed renders.
-  const handleReplace = async (mediaId) => {
+  // Phase 2: commit the render to Shopify.
+  // mode: 'replace' deletes the original; 'add' keeps it (just adds to gallery).
+  const handleCommit = async (mediaId, mode) => {
     const result = renderResults[mediaId];
     if (!result?.renderedDataUrl) return;
 
     setReplaceStatus((prev) => ({
       ...prev,
-      [mediaId]: { state: "busy" },
+      [mediaId]: { state: "busy", mode },
     }));
 
     try {
@@ -215,6 +232,7 @@ function Extension() {
       formData.append("productId", productId);
       formData.append("mediaId", mediaId);
       formData.append("renderedDataUrl", result.renderedDataUrl);
+      formData.append("mode", mode); // 'replace' or 'add'
 
       const res = await fetch(`${BACKEND_URL}/api/replace`, {
         method: "POST",
@@ -229,6 +247,7 @@ function Extension() {
           ...prev,
           [mediaId]: {
             state: "error",
+            mode,
             error: json?.error || `HTTP ${res.status}`,
           },
         }));
@@ -237,6 +256,7 @@ function Extension() {
           ...prev,
           [mediaId]: {
             state: "done",
+            mode,
             newImageUrl: json.newImageUrl,
           },
         }));
@@ -246,11 +266,16 @@ function Extension() {
         ...prev,
         [mediaId]: {
           state: "error",
+          mode,
           error: err?.message || String(err),
         },
       }));
     }
   };
+
+  // Backward-compat aliases for the JSX call sites.
+  const handleReplace = (id) => handleCommit(id, "replace");
+  const handleAddToGallery = (id) => handleCommit(id, "add");
 
   const handleReplaceAll = async () => {
     const ids = Object.keys(renderResults).filter(
@@ -377,77 +402,56 @@ function Extension() {
 
   return (
     <s-admin-action heading={i18n.translate("heading")}>
-      {/* FULLSCREEN VIEWER — covers the whole modal body with a big image
-          when set. Click anywhere to dismiss. Inline styles only because
-          <style> tags get sanitized in the extension sandbox. */}
-      {viewer && (
-        <div
-          onClick={() => setViewer(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            zIndex: 9999,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "zoom-out",
-            padding: 32,
-          }}
+      {/* IN-MODAL IMAGE VIEWER — swaps the modal body when a thumbnail
+          is clicked. position:fixed doesn't escape Shopify's iframe
+          sandbox, so we render inline and let it take over the modal. */}
+      {viewer ? (
+        <s-stack
+          direction="block"
+          gap="base"
+          alignItems="center"
+          justifyContent="center"
+          padding="base"
         >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setViewer(null);
-            }}
-            aria-label="Close"
+          <s-stack
+            direction="inline"
+            gap="base"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <s-text type="strong">
+              {viewer.label || i18n.translate("preview")}
+            </s-text>
+            <s-button onClick={() => setViewer(null)}>
+              {i18n.translate("close_preview")}
+            </s-button>
+          </s-stack>
+          <div
             style={{
-              position: "absolute",
-              top: 24,
-              right: 24,
-              background: "rgba(255,255,255,0.15)",
-              color: "white",
-              border: 0,
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              fontSize: 18,
-              cursor: "pointer",
+              width: "100%",
+              maxHeight: 600,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              background: "#f6f6f7",
+              borderRadius: 12,
+              padding: 16,
+              overflow: "hidden",
             }}
           >
-            ×
-          </button>
-          <img
-            src={viewer.src}
-            alt={viewer.label || ""}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: "90vw",
-              maxHeight: "80vh",
-              objectFit: "contain",
-              borderRadius: 12,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-            }}
-          />
-          {viewer.label && (
-            <div
+            <img
+              src={viewer.src}
+              alt={viewer.label || ""}
               style={{
-                color: "white",
-                fontSize: 14,
-                marginTop: 16,
-                opacity: 0.85,
+                maxWidth: "100%",
+                maxHeight: 560,
+                objectFit: "contain",
+                borderRadius: 8,
               }}
-            >
-              {viewer.label}
-            </div>
-          )}
-        </div>
-      )}
-
+            />
+          </div>
+        </s-stack>
+      ) : (
       <s-stack direction="block" gap="large-100">
         <s-heading>{product.title}</s-heading>
 
@@ -470,7 +474,9 @@ function Extension() {
                 margin: "0 auto",
               }}
             >
-              {/* Animated ring */}
+              {/* Static gray ring + rotated green arc (rotation driven from
+                  React state, since SVG SMIL and CSS animations don't run
+                  in the extension sandbox). */}
               <svg
                 width="140"
                 height="140"
@@ -482,8 +488,8 @@ function Extension() {
                   cy="70"
                   r="64"
                   fill="none"
-                  stroke="rgba(0,0,0,0.08)"
-                  strokeWidth="5"
+                  stroke="rgba(0,0,0,0.10)"
+                  strokeWidth="6"
                 />
                 <circle
                   cx="70"
@@ -491,20 +497,11 @@ function Extension() {
                   r="64"
                   fill="none"
                   stroke="#00C39A"
-                  strokeWidth="5"
+                  strokeWidth="6"
                   strokeLinecap="round"
                   strokeDasharray="120 402"
-                  transform="rotate(-90 70 70)"
-                >
-                  <animateTransform
-                    attributeName="transform"
-                    type="rotate"
-                    from="0 70 70"
-                    to="360 70 70"
-                    dur="1.1s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
+                  transform={`rotate(${spinDeg - 90} 70 70)`}
+                />
               </svg>
               {/* Emilia logo centered inside the ring */}
               <div
@@ -587,96 +584,70 @@ function Extension() {
                         {i18n.translate("failed")} {r.error}
                       </s-text>
                     ) : (
-                      <s-stack
-                        direction="inline"
-                        gap="base"
-                        alignItems="center"
-                      >
-                        {/* Before — click to view fullscreen */}
-                        <s-stack
-                          direction="block"
-                          gap="extra-tight"
+                      <s-stack direction="block" gap="base">
+                        {/* Big before/after row. Click any image to zoom in
+                            via the inline viewer (which swaps the modal body). */}
+                        <s-grid
+                          gridTemplateColumns="1fr auto 1fr"
+                          gap="base"
                           alignItems="center"
                         >
-                          <s-text tone="subdued">
-                            {i18n.translate("before")}
-                          </s-text>
-                          {r.originalUrl && (
-                            <s-clickable
-                              onClick={() =>
-                                setViewer({
-                                  src: r.originalUrl,
-                                  label: i18n.translate("before"),
-                                })
-                              }
-                            >
-                              <s-thumbnail
-                                src={r.originalUrl}
-                                alt={i18n.translate("before")}
-                                size="large-100"
-                              />
-                            </s-clickable>
-                          )}
-                          <s-text tone="subdued" type="generic">
-                            {i18n.translate("click_to_view")}
-                          </s-text>
-                        </s-stack>
-
-                        <s-text>→</s-text>
-
-                        {/* After — click to view fullscreen */}
-                        <s-stack
-                          direction="block"
-                          gap="extra-tight"
-                          alignItems="center"
-                        >
-                          <s-text tone="subdued">
-                            {i18n.translate("after")}
-                          </s-text>
-                          <s-clickable
-                            onClick={() =>
+                          <PreviewImage
+                            src={r.originalUrl}
+                            label={i18n.translate("before")}
+                            onZoom={() =>
+                              setViewer({
+                                src: r.originalUrl,
+                                label: i18n.translate("before"),
+                              })
+                            }
+                          />
+                          <s-text>→</s-text>
+                          <PreviewImage
+                            src={rs.newImageUrl || r.renderedDataUrl}
+                            label={i18n.translate("after")}
+                            onZoom={() =>
                               setViewer({
                                 src: rs.newImageUrl || r.renderedDataUrl,
                                 label: i18n.translate("after"),
                               })
                             }
-                          >
-                            <s-thumbnail
-                              src={rs.newImageUrl || r.renderedDataUrl}
-                              alt={i18n.translate("after")}
-                              size="large-100"
-                            />
-                          </s-clickable>
-                          <s-text tone="subdued" type="generic">
-                            {i18n.translate("click_to_view")}
-                          </s-text>
-                        </s-stack>
+                          />
+                        </s-grid>
 
-                        {/* Replace button column */}
-                        <s-stack
-                          direction="block"
-                          gap="extra-tight"
-                          alignItems="center"
-                        >
-                          {rs.state === "done" ? (
-                            <s-badge tone="success">
-                              ✓ {i18n.translate("replaced")}
-                            </s-badge>
-                          ) : (
+                        {/* Action row: either committed status, or a pair of
+                            commit buttons (Replace original / Add to gallery). */}
+                        {rs.state === "done" ? (
+                          <s-badge tone="success">
+                            ✓{" "}
+                            {rs.mode === "add"
+                              ? i18n.translate("added")
+                              : i18n.translate("replaced")}
+                          </s-badge>
+                        ) : (
+                          <s-stack direction="inline" gap="small-200">
                             <s-button
                               onClick={() => handleReplace(id)}
                               disabled={rs.state === "busy"}
                               variant="primary"
                             >
-                              {rs.state === "busy"
+                              {rs.state === "busy" && rs.mode === "replace"
                                 ? i18n.translate("replacing")
                                 : i18n.translate("replace_btn")}
                             </s-button>
-                          )}
-                          {rs.state === "error" && (
-                            <s-text tone="critical">{rs.error}</s-text>
-                          )}
-                        </s-stack>
+                            <s-button
+                              onClick={() => handleAddToGallery(id)}
+                              disabled={rs.state === "busy"}
+                            >
+                              {rs.state === "busy" && rs.mode === "add"
+                                ? i18n.translate("adding")
+                                : i18n.translate("add_to_gallery")}
+                            </s-button>
+                          </s-stack>
+                        )}
+                        {rs.state === "error" && (
+                          <s-text tone="critical">{rs.error}</s-text>
+                        )}
                       </s-stack>
                     )}
                   </s-stack>
@@ -859,9 +830,10 @@ function Extension() {
           <s-text tone="subdued">{i18n.translate("not_synced")}</s-text>
         )}
       </s-stack>
+      )}
 
-      {/* PRIMARY action varies by phase */}
-      {phase === "select" && (
+      {/* PRIMARY action varies by phase. Hidden while the viewer is open. */}
+      {!viewer && phase === "select" && (
         <s-button
           slot="primary-action"
           disabled={!hasImages || selectedCount === 0}
@@ -872,7 +844,7 @@ function Extension() {
         </s-button>
       )}
 
-      {phase === "review" && (
+      {!viewer && phase === "review" && (
         <s-button slot="primary-action" onClick={handleBackToSelect}>
           {i18n.translate("back_to_select")}
         </s-button>
@@ -884,6 +856,35 @@ function Extension() {
           : i18n.translate("cancel")}
       </s-button>
     </s-admin-action>
+  );
+}
+
+// Click-to-zoom preview tile used in the review phase. Uses a plain <img>
+// so we can size it bigger than s-thumbnail allows.
+function PreviewImage({ src, label, onZoom }) {
+  if (!src) return null;
+  return (
+    <s-stack direction="block" gap="extra-tight" alignItems="center">
+      <s-text tone="subdued">{label}</s-text>
+      <s-clickable onClick={onZoom} borderRadius="base">
+        <img
+          src={src}
+          alt={label}
+          style={{
+            width: "100%",
+            maxWidth: 220,
+            aspectRatio: "1",
+            objectFit: "cover",
+            borderRadius: 12,
+            display: "block",
+            cursor: "zoom-in",
+          }}
+        />
+      </s-clickable>
+      <s-text tone="subdued" type="generic">
+        click to view larger
+      </s-text>
+    </s-stack>
   );
 }
 

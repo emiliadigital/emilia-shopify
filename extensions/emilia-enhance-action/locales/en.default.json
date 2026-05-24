@@ -36,5 +36,10 @@
   "replacing": "Replacing…",
   "replaced": "Replaced",
   "back_to_select": "Generate more",
-  "click_to_view": "click to view"
+  "click_to_view": "click to view",
+  "add_to_gallery": "Add to gallery",
+  "adding": "Adding…",
+  "added": "Added",
+  "preview": "Preview",
+  "close_preview": "Back to results"
 }
