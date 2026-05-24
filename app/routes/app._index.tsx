@@ -8,7 +8,12 @@ import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
-  return redirect("/app/settings");
+  // Preserve the inbound query string (embedded, host, id_token, hmac, shop,
+  // session, timestamp) so /app/settings can re-authenticate with the same
+  // session token — otherwise authenticate.admin throws and we get bounced
+  // to /auth/login.
+  const url = new URL(request.url);
+  return redirect(`/app/settings${url.search}`);
 };
 
 export default function Index() {
