@@ -350,6 +350,28 @@ export default function Settings() {
               </BlockStack>
             </Card>
 
+            <Card>
+              <BlockStack gap="300">
+                <Text as="h2" variant="headingMd">
+                  Subscription
+                </Text>
+                <Text as="p" variant="bodyMd">
+                  View your current plan, top up credits, and update billing at
+                  Emilia AI Studio. Charges are billed to your Emilia account,
+                  not through Shopify.
+                </Text>
+                <InlineStack>
+                  <Button
+                    url="https://ai.emilia.digital/my-account"
+                    target="_blank"
+                    accessibilityLabel="Manage your Emilia AI Studio subscription"
+                  >
+                    Manage subscription
+                  </Button>
+                </InlineStack>
+              </BlockStack>
+            </Card>
+
             {hasConfig && (
               <Card>
                 <BlockStack gap="400">
