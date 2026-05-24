@@ -1,10 +1,10 @@
-// Bulk-enhance dashboard. Searchable, paginated list of products. Multi-select
-// + bulk action that enhances the featured image of every selected product.
-// For per-image control, the merchant opens a product in Shopify Admin where
-// the Action and Block extensions handle individual enhancement.
+// Bulk Enhancement dashboard. Searchable, paginated product list. Multi-select
+// + a configuration modal (style picker / helpers / aspect / resolution),
+// then a client-side sequential loop that enhances the featured image of
+// each selected product so the merchant sees live "Enhancing N of M…" progress.
 
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Badge,
   Banner,
@@ -14,18 +14,28 @@ import {
   Card,
   EmptyState,
   IndexTable,
+  InlineStack,
   Layout,
+  Modal,
   Page,
+  ProgressBar,
+  Select,
+  Tabs,
   Text,
   TextField,
   Thumbnail,
   useIndexResourceState,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/emilia-settings.server";
+import type {
+  EmiliaConfig,
+  EmiliaHelper,
+  EmiliaStyle,
+} from "../lib/emilia.server";
 
 interface ProductRow {
   id: string;
@@ -48,14 +58,15 @@ interface LoaderData {
     endCursor: string | null;
   };
   search: string;
-  cursor: string | null;
-  direction: "after" | "before";
   defaults: {
     style: string;
     aspectRatio: string;
     resolution: string;
     presenter: string | null;
+    helpers: Record<string, string>;
+    backdropColor: string;
   } | null;
+  config: EmiliaConfig | null;
 }
 
 const PRODUCTS_QUERY_AFTER = `#graphql
@@ -74,12 +85,7 @@ const PRODUCTS_QUERY_AFTER = `#graphql
           }
         }
       }
-      pageInfo {
-        hasNextPage
-        hasPreviousPage
-        startCursor
-        endCursor
-      }
+      pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
     }
   }
 `;
@@ -100,12 +106,7 @@ const PRODUCTS_QUERY_BEFORE = `#graphql
           }
         }
       }
-      pageInfo {
-        hasNextPage
-        hasPreviousPage
-        startCursor
-        endCursor
-      }
+      pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
     }
   }
 `;
@@ -125,9 +126,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         endCursor: null,
       },
       search: "",
-      cursor: null,
-      direction: "after" as const,
       defaults: null,
+      config: null,
     } satisfies LoaderData;
   }
 
@@ -185,21 +185,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     products,
     pageInfo: body.data.products.pageInfo,
     search,
-    cursor,
-    direction,
     defaults: {
       style: settings.defaultStyle,
       aspectRatio: settings.defaultAspectRatio,
       resolution: settings.defaultResolution,
       presenter: settings.defaultPresenter,
+      helpers: settings.helpers,
+      backdropColor: settings.backdropColor,
     },
+    config: settings.config,
   } satisfies LoaderData;
 };
 
-export default function ProductsDashboard() {
+export default function BulkEnhancementPage() {
   return (
     <Page>
-      <TitleBar title="Emilia AI Studio — Products" />
+      <TitleBar title="Bulk Enhancement" />
       <Body />
     </Page>
   );
@@ -250,6 +251,15 @@ function Body() {
   );
 }
 
+interface BulkProgress {
+  total: number;
+  current: number;
+  done: number;
+  failed: number;
+  errors: { productId: string; title: string; message: string }[];
+  finished: boolean;
+}
+
 function ProductsList({
   data,
   navigate,
@@ -260,7 +270,6 @@ function ProductsList({
   const [searchValue, setSearchValue] = useState(data.search);
   const shopify = useAppBridge();
 
-  // Reset the search field when the loader's value changes (after navigation).
   useEffect(() => {
     setSearchValue(data.search);
   }, [data.search]);
@@ -277,45 +286,119 @@ function ProductsList({
       data.products.map((p) => ({ id: p.id })) as { id: string }[],
     );
 
-  const bulkFetcher = useFetcher<{
-    ok: boolean;
-    processed?: number;
-    failed?: number;
-    error?: string;
-  }>();
-  const bulkBusy = bulkFetcher.state !== "idle";
+  const [configOpen, setConfigOpen] = useState(false);
+  const [progress, setProgress] = useState<BulkProgress | null>(null);
 
-  useEffect(() => {
-    if (bulkFetcher.state === "idle" && bulkFetcher.data) {
-      if (bulkFetcher.data.ok) {
-        shopify.toast.show(
-          `Enhanced ${bulkFetcher.data.processed ?? 0} products` +
-            (bulkFetcher.data.failed
-              ? ` (${bulkFetcher.data.failed} failed)`
-              : ""),
-        );
-      } else {
-        shopify.toast.show(bulkFetcher.data.error ?? "Bulk enhance failed", {
-          isError: true,
+  const openConfig = () => {
+    if (selectedResources.length === 0) return;
+    setConfigOpen(true);
+  };
+
+  // Run the enhance loop sequentially over the selected product IDs.
+  // Each product's featured image is enhanced via /api/enhance with the
+  // chosen settings. Progress state updates after each iteration.
+  const runBulkEnhance = async (overrides: {
+    style: string;
+    aspect: string;
+    resolution: string;
+    presenter: string;
+    helpers: Record<string, string>;
+  }) => {
+    const ids = [...selectedResources];
+    const idToTitle = new Map(data.products.map((p) => [p.id, p.title]));
+    setProgress({
+      total: ids.length,
+      current: 0,
+      done: 0,
+      failed: 0,
+      errors: [],
+      finished: false,
+    });
+    setConfigOpen(false);
+
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      setProgress((prev) =>
+        prev ? { ...prev, current: i + 1 } : prev,
+      );
+
+      try {
+        const formData = new FormData();
+        formData.append("productId", id);
+        // Use the FEATURED media ID — backend will look it up if mediaId
+        // matches the featured image. The backend's /api/enhance expects
+        // both productId and mediaId so we pass null and let it fall back.
+        const product = data.products.find((p) => p.id === id);
+        if (!product?.firstMediaId) throw new Error("No featured image");
+        formData.append("mediaId", product.firstMediaId);
+        formData.append("style", overrides.style);
+        formData.append("aspect", overrides.aspect);
+        formData.append("resolution", overrides.resolution);
+        if (overrides.presenter) {
+          formData.append("presenterId", overrides.presenter);
+        }
+        for (const [k, v] of Object.entries(overrides.helpers)) {
+          if (v) formData.append(k, v);
+        }
+
+        const res = await fetch("/api/enhance", {
+          method: "POST",
+          body: formData,
         });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) {
+          setProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  failed: prev.failed + 1,
+                  errors: [
+                    ...prev.errors,
+                    {
+                      productId: id,
+                      title: idToTitle.get(id) ?? id,
+                      message: json?.error || `HTTP ${res.status}`,
+                    },
+                  ],
+                }
+              : prev,
+          );
+        } else {
+          setProgress((prev) =>
+            prev ? { ...prev, done: prev.done + 1 } : prev,
+          );
+        }
+      } catch (err) {
+        setProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                failed: prev.failed + 1,
+                errors: [
+                  ...prev.errors,
+                  {
+                    productId: id,
+                    title: idToTitle.get(id) ?? id,
+                    message: err instanceof Error ? err.message : String(err),
+                  },
+                ],
+              }
+            : prev,
+        );
       }
     }
-  }, [bulkFetcher.state, bulkFetcher.data, shopify]);
 
-  const handleBulkEnhance = () => {
-    if (selectedResources.length === 0) return;
-    const formData = new FormData();
-    selectedResources.forEach((id) => formData.append("productIds", id));
-    bulkFetcher.submit(formData, { method: "POST", action: "/api/bulk-enhance" });
+    setProgress((prev) => (prev ? { ...prev, finished: true } : prev));
+    shopify.toast.show(
+      `Enhanced ${ids.length} products. Failed: ${(progress?.failed ?? 0)}`,
+    );
   };
 
   const promotedBulkActions = [
     {
-      content: bulkBusy
-        ? `Enhancing ${selectedResources.length}…`
-        : `Enhance ${selectedResources.length} ${selectedResources.length === 1 ? "product" : "products"}`,
-      onAction: handleBulkEnhance,
-      disabled: bulkBusy,
+      content: `Enhance ${selectedResources.length} ${selectedResources.length === 1 ? "product" : "products"}`,
+      onAction: openConfig,
+      disabled: !!progress && !progress.finished,
     },
   ];
 
@@ -387,6 +470,56 @@ function ProductsList({
 
   return (
     <BlockStack gap="400">
+      {progress && (
+        <Card>
+          <BlockStack gap="300">
+            <InlineStack align="space-between" blockAlign="center">
+              <Text as="h3" variant="headingMd">
+                {progress.finished
+                  ? "Bulk enhancement complete"
+                  : `Enhancing ${progress.current} of ${progress.total}…`}
+              </Text>
+              {progress.finished && (
+                <Button onClick={() => setProgress(null)}>Dismiss</Button>
+              )}
+            </InlineStack>
+            <ProgressBar
+              progress={
+                progress.total === 0
+                  ? 0
+                  : ((progress.done + progress.failed) / progress.total) * 100
+              }
+            />
+            <InlineStack gap="400">
+              <Text as="span" tone="success">
+                ✓ {progress.done} done
+              </Text>
+              {progress.failed > 0 && (
+                <Text as="span" tone="critical">
+                  ✗ {progress.failed} failed
+                </Text>
+              )}
+            </InlineStack>
+            {progress.finished && progress.errors.length > 0 && (
+              <Banner tone="warning" title="Some products failed">
+                <BlockStack gap="100">
+                  {progress.errors.slice(0, 10).map((e) => (
+                    <Text key={e.productId} as="p" variant="bodySm">
+                      • {e.title}: {e.message}
+                    </Text>
+                  ))}
+                </BlockStack>
+              </Banner>
+            )}
+            {!progress.finished && (
+              <Text as="p" tone="subdued" variant="bodySm">
+                Keep this tab open. Each product takes 30–60 seconds.
+              </Text>
+            )}
+          </BlockStack>
+        </Card>
+      )}
+
       <Card>
         <BlockStack gap="300">
           <Box paddingBlockEnd="200">
@@ -457,14 +590,304 @@ function ProductsList({
         </BlockStack>
       </Card>
 
-      {bulkBusy && (
-        <Banner tone="info" title="Bulk enhance running">
-          <p>
-            Enhancing the featured image of each selected product. This usually
-            takes 30–60 seconds per product. Keep this tab open.
-          </p>
-        </Banner>
+      {configOpen && data.config && data.defaults && (
+        <BulkConfigModal
+          open={configOpen}
+          onClose={() => setConfigOpen(false)}
+          config={data.config}
+          defaults={data.defaults}
+          selectedCount={selectedResources.length}
+          onStart={runBulkEnhance}
+        />
       )}
     </BlockStack>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Config modal — mirrors the action extension's picker (tabs of styles +
+// cards + dynamic helpers + aspect + resolution + presenter), but using
+// Polaris components since we're inside the embedded app.
+// ---------------------------------------------------------------------------
+
+const REFERENCE_STYLE_IDS = new Set([
+  "reference",
+  "reference_food",
+  "reference_jewelry",
+  "reference_clothing",
+  "reference_furniture",
+  "reference_cosmetics",
+]);
+
+function BulkConfigModal({
+  open,
+  onClose,
+  config,
+  defaults,
+  selectedCount,
+  onStart,
+}: {
+  open: boolean;
+  onClose: () => void;
+  config: EmiliaConfig;
+  defaults: {
+    style: string;
+    aspectRatio: string;
+    resolution: string;
+    presenter: string | null;
+    helpers: Record<string, string>;
+    backdropColor: string;
+  };
+  selectedCount: number;
+  onStart: (overrides: {
+    style: string;
+    aspect: string;
+    resolution: string;
+    presenter: string;
+    helpers: Record<string, string>;
+  }) => void;
+}) {
+  const [style, setStyle] = useState(defaults.style);
+  const [aspect, setAspect] = useState(defaults.aspectRatio);
+  const [resolution, setResolution] = useState(defaults.resolution);
+  const [presenter, setPresenter] = useState(defaults.presenter ?? "");
+  const [helperValues, setHelperValues] = useState<Record<string, string>>(
+    defaults.helpers,
+  );
+
+  // Group styles by mode and figure out which tab is active.
+  const stylesByMode = useMemo(() => {
+    const grouped: Record<string, EmiliaStyle[]> = {};
+    for (const s of config.styles ?? []) {
+      if (REFERENCE_STYLE_IDS.has(s.id)) continue;
+      const m = s.mode ?? "product";
+      if (!grouped[m]) grouped[m] = [];
+      grouped[m].push(s);
+    }
+    return grouped;
+  }, [config.styles]);
+
+  const modeKeys = Object.keys(stylesByMode);
+  const initialMode =
+    (config.styles ?? []).find((s) => s.id === style)?.mode ??
+    modeKeys[0] ??
+    "product";
+  const [activeMode, setActiveMode] = useState(initialMode);
+
+  const selectedStyleObj = (config.styles ?? []).find((s) => s.id === style);
+  const effectiveMode = selectedStyleObj?.mode ?? activeMode;
+
+  // Compute applicable helpers for the currently selected style.
+  const applicableHelpers: EmiliaHelper[] = useMemo(() => {
+    const modeHelpers = config.helpers?.[effectiveMode] ?? [];
+    return modeHelpers.filter((h) => {
+      if (!h.name) return false;
+      let helperStyles = h.styles;
+      if (typeof helperStyles === "string") {
+        helperStyles = (helperStyles as string)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      if (!Array.isArray(helperStyles) || helperStyles.length === 0) return true;
+      return helperStyles.includes(style);
+    });
+  }, [config.helpers, effectiveMode, style]);
+
+  const aspectOptions = Object.entries(config.aspect_ratios ?? {}).map(
+    ([k, v]) => ({
+      label: `${v.title} — ${v.description}`,
+      value: k,
+    }),
+  );
+  const resolutionOptions = Object.entries(config.resolutions ?? {}).map(
+    ([k, v]) => ({
+      label: `${v.title} (${v.pixels})${v.credits ? ` — ${v.credits} credits` : ""}`,
+      value: k,
+    }),
+  );
+  const presenterOptions = [
+    { label: "— None —", value: "" },
+    ...((config.presenters ?? []).map((p) => ({
+      label: p.name,
+      value: String(p.id),
+    }))),
+  ];
+  const showPresenter =
+    (config.presenters?.length ?? 0) > 0 && !!selectedStyleObj?.has_presenter;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Enhance ${selectedCount} ${selectedCount === 1 ? "product" : "products"}`}
+      primaryAction={{
+        content: "Start enhancement",
+        onAction: () =>
+          onStart({
+            style,
+            aspect,
+            resolution,
+            presenter: presenter && presenter !== "" ? presenter : "",
+            helpers: helperValues,
+          }),
+      }}
+      secondaryActions={[{ content: "Cancel", onAction: onClose }]}
+      size="large"
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text as="p" tone="subdued">
+            These settings apply to the featured image of each selected
+            product. You can adjust per-product via the Enhance button on
+            individual product pages.
+          </Text>
+
+          {/* Style tabs */}
+          {modeKeys.length > 0 && (
+            <Tabs
+              tabs={modeKeys.map((mode) => ({
+                id: `tab-${mode}`,
+                content:
+                  (config.modes?.[mode]?.title) ??
+                  mode.charAt(0).toUpperCase() + mode.slice(1),
+                panelID: `panel-${mode}`,
+              }))}
+              selected={Math.max(0, modeKeys.indexOf(activeMode))}
+              onSelect={(idx) => setActiveMode(modeKeys[idx])}
+              fitted
+            />
+          )}
+
+          {/* Card grid for the active tab */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {(stylesByMode[activeMode] ?? []).map((s) => {
+              const isSelected = style === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setStyle(s.id)}
+                  style={{
+                    padding: 8,
+                    border: isSelected
+                      ? "2px solid #2c6ecb"
+                      : "1px solid #e1e3e5",
+                    borderRadius: 12,
+                    background: isSelected ? "#f3f8ff" : "white",
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      aspectRatio: "1",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      background: "#f6f6f7",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {s.thumbnail && (
+                      <img
+                        src={s.thumbnail}
+                        alt={s.name}
+                        loading="lazy"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    )}
+                  </div>
+                  <Text
+                    as="span"
+                    variant="bodySm"
+                    fontWeight={isSelected ? "bold" : "regular"}
+                  >
+                    {s.name}
+                  </Text>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Dynamic helpers */}
+          {applicableHelpers.map((helper) => {
+            const value = helperValues[helper.name] ?? helper.default ?? "";
+            const setValue = (v: string) =>
+              setHelperValues((prev) => ({ ...prev, [helper.name]: v }));
+
+            if (helper.type === "color") {
+              return (
+                <div key={helper.name}>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {helper.label || helper.name}
+                  </Text>
+                  <input
+                    type="color"
+                    value={value || "#FFFFFF"}
+                    onChange={(e) => setValue(e.currentTarget.value)}
+                    style={{
+                      width: 60,
+                      height: 36,
+                      border: "1px solid #c9cccf",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      padding: 2,
+                      background: "white",
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            const opts = Object.entries(helper.options || {}).map(
+              ([k, label]) => ({ label, value: k }),
+            );
+            return (
+              <Select
+                key={helper.name}
+                label={helper.label || helper.name}
+                options={opts}
+                value={value}
+                onChange={setValue}
+              />
+            );
+          })}
+
+          {showPresenter && (
+            <Select
+              label="Presenter"
+              options={presenterOptions}
+              value={presenter}
+              onChange={setPresenter}
+            />
+          )}
+
+          <Select
+            label="Aspect ratio"
+            options={aspectOptions}
+            value={aspect}
+            onChange={setAspect}
+          />
+          <Select
+            label="Resolution"
+            options={resolutionOptions}
+            value={resolution}
+            onChange={setResolution}
+          />
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
   );
 }
