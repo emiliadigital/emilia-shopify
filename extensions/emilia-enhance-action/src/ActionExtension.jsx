@@ -443,7 +443,14 @@ function Extension() {
               </s-button>
             </s-stack>
           </s-stack>
-          <s-thumbnail src={viewer.src} alt={viewer.label || ""} size="large-100" />
+          <s-image
+            src={viewer.src}
+            alt={viewer.label || ""}
+            inlineSize="500px"
+            aspectRatio="1"
+            objectFit="contain"
+            borderRadius="base"
+          />
           <s-text tone="subdued">
             {i18n.translate("preview_hint")}
           </s-text>
@@ -819,14 +826,22 @@ function Extension() {
 }
 
 // Click-to-zoom preview tile used in the review phase.
-// Uses s-thumbnail (proven to render in the sandbox) at the largest preset.
+// s-thumbnail caps at ~64px; for a real "big" preview we use s-image with
+// an explicit inlineSize.
 function PreviewImage({ src, label, onZoom }) {
   if (!src) return null;
   return (
     <s-stack direction="block" gap="extra-tight" alignItems="center">
       <s-text tone="subdued">{label}</s-text>
-      <s-clickable onClick={onZoom}>
-        <s-thumbnail src={src} alt={label} size="large-100" />
+      <s-clickable onClick={onZoom} borderRadius="base">
+        <s-image
+          src={src}
+          alt={label}
+          inlineSize="220px"
+          aspectRatio="1"
+          objectFit="cover"
+          borderRadius="base"
+        />
       </s-clickable>
       <s-text tone="subdued" type="generic">
         click to view larger
