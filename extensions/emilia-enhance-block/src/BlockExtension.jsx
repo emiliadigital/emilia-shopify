@@ -77,10 +77,31 @@ function Extension() {
       formData.append("productId", productId);
       formData.append("mediaId", mediaId);
 
-      const res = await fetch(`${BACKEND_URL}/api/enhance`, {
+      // Inline block: render + replace as one user-perceived action.
+      // First render, then auto-replace if successful.
+      const renderRes = await fetch(`${BACKEND_URL}/api/render`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
+      });
+      const renderJson = await renderRes.json().catch(() => null);
+      if (!renderRes.ok || !renderJson?.ok) {
+        updateStatus(mediaId, {
+          state: "error",
+          error: renderJson?.error || `HTTP ${renderRes.status}`,
+        });
+        return;
+      }
+
+      // Now actually do the swap.
+      const replaceData = new FormData();
+      replaceData.append("productId", productId);
+      replaceData.append("mediaId", mediaId);
+      replaceData.append("renderedDataUrl", renderJson.renderedDataUrl);
+      const res = await fetch(`${BACKEND_URL}/api/replace`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: replaceData,
       });
 
       let json = null;

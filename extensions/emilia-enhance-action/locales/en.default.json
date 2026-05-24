@@ -7,7 +7,7 @@
   "select_none": "Clear",
   "no_images": "This product has no images yet.",
   "enhance": "Enhance",
-  "enhancing": "Enhancing…",
+  "enhancing": "Generating",
   "cancel": "Cancel",
   "close": "Close",
   "missing_key": "Configure your Emilia API key in the app's Settings page first.",
@@ -24,5 +24,16 @@
   "default": "Default",
   "none": "None",
   "selected": "Selected",
-  "not_synced": "Styles & presenters haven't been synced yet. Open the app's Settings page and click \"Sync\" to enable per-run overrides."
+  "not_synced": "Styles & presenters haven't been synced yet. Open the app's Settings page and click \"Sync\" to enable per-run overrides.",
+  "rendering_heading": "Generating your enhanced image",
+  "rendering_progress": "Image {done} of {total}",
+  "rendering_wait": "This usually takes 30–60 seconds per image.",
+  "review_heading": "Review the results",
+  "before": "Original",
+  "after": "Enhanced",
+  "replace_btn": "Replace original",
+  "replace_all": "Replace all",
+  "replacing": "Replacing…",
+  "replaced": "Replaced",
+  "back_to_select": "Generate more"
 }

@@ -7,7 +7,7 @@
   "select_none": "Effacer",
   "no_images": "Ce produit n'a pas encore d'images.",
   "enhance": "Améliorer",
-  "enhancing": "Amélioration en cours…",
+  "enhancing": "Génération",
   "cancel": "Annuler",
   "close": "Fermer",
   "missing_key": "Configurez d'abord votre clé API Emilia dans les paramètres de l'application.",
@@ -24,5 +24,16 @@
   "default": "Par défaut",
   "none": "Aucun",
   "selected": "Sélectionnée",
-  "not_synced": "Les styles et présentateurs n'ont pas encore été synchronisés. Ouvrez les paramètres de l'application et cliquez sur \"Synchroniser\" pour activer les options."
+  "not_synced": "Les styles et présentateurs n'ont pas encore été synchronisés. Ouvrez les paramètres de l'application et cliquez sur \"Synchroniser\" pour activer les options.",
+  "rendering_heading": "Génération de votre image améliorée",
+  "rendering_progress": "Image {done} sur {total}",
+  "rendering_wait": "Cela prend généralement 30 à 60 secondes par image.",
+  "review_heading": "Vérifiez les résultats",
+  "before": "Original",
+  "after": "Améliorée",
+  "replace_btn": "Remplacer l'original",
+  "replace_all": "Tout remplacer",
+  "replacing": "Remplacement…",
+  "replaced": "Remplacée",
+  "back_to_select": "Générer plus"
 }

@@ -1,7 +1,6 @@
-// POST /api/enhance — combined render + replace, one shot. Used by the
-// in-app Products list page where each tile has a single "Enhance" button
-// (no preview / no confirmation). The action extension and block extension
-// use /api/render + /api/replace separately so they can show a preview.
+// POST /api/render — generates the enhanced image but does NOT touch Shopify.
+// Returns the result as a base64 data URL so the extension can preview it and
+// only commit (via /api/replace) when the merchant confirms.
 
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 
@@ -13,11 +12,6 @@ import {
   EmiliaApiError,
 } from "../lib/emilia.server";
 import { getSettings } from "../lib/emilia-settings.server";
-import {
-  deleteProductMedia,
-  reorderMediaToIndex,
-  uploadAndAttachImage,
-} from "../lib/shopify-media.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -80,12 +74,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     String(formData.get("aspect") ?? "") || settings.defaultAspectRatio;
   const resolution =
     String(formData.get("resolution") ?? "") || settings.defaultResolution;
+
   const presenterRaw = String(formData.get("presenterId") ?? "");
   const presenterId =
     presenterRaw === "__none__"
       ? ""
       : presenterRaw || settings.defaultPresenter || "";
 
+  // Merge any non-reserved fields as helpers (shadow, angle, bg_color, etc.).
   const RESERVED = new Set([
     "productId",
     "mediaId",
@@ -106,7 +102,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: false, error: "Missing productId or mediaId" }, 400);
   }
 
-  // 1. Locate original media on the product.
+  // 1. Locate the original media on the product and grab its URL.
   const mediaListRes = await admin.graphql(PRODUCT_MEDIA_LIST, {
     variables: { id: productId },
   });
@@ -116,31 +112,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!mediaListBody.data.product) {
     return json({ ok: false, error: "Product not found" }, 404);
   }
-  const nodes = mediaListBody.data.product.media.nodes;
-  const originalIndex = nodes.findIndex((n) => n.id === mediaId);
-  const original = originalIndex >= 0 ? nodes[originalIndex] : null;
-  if (!original || !original.image?.url) {
+  const original = mediaListBody.data.product.media.nodes.find(
+    (n) => n.id === mediaId,
+  );
+  if (!original?.image?.url) {
     return json(
       { ok: false, error: "Original image not found on product" },
       404,
     );
   }
 
-  // 2. Fetch original bytes + send to Emilia.
-  let dataUrl: string;
+  // 2. Pull the original image and base64-encode for the Emilia API.
+  let originalDataUrl: string;
   try {
-    dataUrl = await imageUrlToDataUrl(original.image.url);
+    originalDataUrl = await imageUrlToDataUrl(original.image.url);
   } catch (err) {
     return json(
-      { ok: false, error: err instanceof Error ? err.message : "Image fetch failed" },
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : "Image fetch failed",
+      },
       400,
     );
   }
 
+  // 3. Call Emilia.
   let renderResponse;
   try {
     renderResponse = await renderImage(settings.apiKey, {
-      imageDataUrl: dataUrl,
+      imageDataUrl: originalDataUrl,
       preset: style,
       mode: "product",
       aspect,
@@ -163,51 +163,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: false, error: "Emilia API did not return an image" }, 502);
   }
 
-  // 3. Decode + upload to Shopify + replace.
+  // 4. Normalize to data URL (may come back as data: or http: URL).
   let rendered;
   try {
     rendered = await downloadRenderedImage(renderResponse.data_url);
   } catch (err) {
     return json(
-      { ok: false, error: err instanceof Error ? err.message : "Failed to read rendered image" },
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : "Failed to read rendered image",
+      },
       502,
     );
   }
 
-  const filename = `emilia-${Date.now()}.${rendered.extension}`;
-  let uploaded;
-  try {
-    uploaded = await uploadAndAttachImage(
-      admin,
-      productId,
-      rendered.buffer,
-      rendered.mimeType,
-      filename,
-      original.image.altText ?? undefined,
-    );
-  } catch (err) {
-    return json(
-      { ok: false, error: err instanceof Error ? err.message : "Upload to Shopify failed" },
-      502,
-    );
-  }
-
-  try {
-    await reorderMediaToIndex(admin, productId, uploaded.mediaId, originalIndex);
-  } catch (err) {
-    console.warn("[Emilia] reorder failed:", err instanceof Error ? err.message : err);
-  }
-
-  try {
-    await deleteProductMedia(admin, productId, [mediaId]);
-  } catch (err) {
-    console.warn("[Emilia] delete-old failed:", err instanceof Error ? err.message : err);
-  }
+  const renderedDataUrl = `data:${rendered.mimeType};base64,${rendered.buffer.toString("base64")}`;
 
   return json({
     ok: true,
-    newMediaId: uploaded.mediaId,
-    newImageUrl: uploaded.imageUrl,
+    productId,
+    mediaId,
+    originalImageUrl: original.image.url,
+    renderedDataUrl,
+    renderedMimeType: rendered.mimeType,
+    renderedExtension: rendered.extension,
   });
 };
 

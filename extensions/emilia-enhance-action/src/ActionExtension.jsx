@@ -44,11 +44,18 @@ function Extension() {
   // Active category tab.
   const [activeMode, setActiveMode] = useState(null);
 
-  // Per-media enhance status: { [mediaId]: 'busy' | 'done' | 'error' }
-  const [statusByMedia, setStatusByMedia] = useState({});
-  const [errorByMedia, setErrorByMedia] = useState({});
-  const [overallBusy, setOverallBusy] = useState(false);
-  const [overallDone, setOverallDone] = useState(false);
+  // Flow phase: 'select' (pick image + options) → 'rendering' (loading
+  // overlay while Emilia generates) → 'review' (show before/after, user
+  // confirms each replace).
+  const [phase, setPhase] = useState("select");
+
+  // Per-media render result during 'review' phase.
+  // { [mediaId]: { renderedDataUrl, originalUrl, error? } }
+  const [renderResults, setRenderResults] = useState({});
+
+  // Per-media replace status during 'review'.
+  // { [mediaId]: { state: 'idle'|'busy'|'done'|'error', newImageUrl?, error? } }
+  const [replaceStatus, setReplaceStatus] = useState({});
 
   // Load product + config in parallel
   useEffect(() => {
@@ -128,19 +135,20 @@ function Extension() {
     setSelectedIds(new Set());
   };
 
-  const handleEnhance = async () => {
+  // Phase 1: render every selected image via /api/render, then move to review.
+  const handleRender = async () => {
     if (selectedIds.size === 0) return;
-    setOverallBusy(true);
-    setOverallDone(false);
-    setStatusByMedia({});
-    setErrorByMedia({});
+    setPhase("rendering");
+    setRenderResults({});
+    setReplaceStatus({});
 
     const token = await shopify.auth.idToken();
     const ids = Array.from(selectedIds);
+    const results = {};
 
-    // Process sequentially so the user sees per-image progress.
     for (const mediaId of ids) {
-      setStatusByMedia((prev) => ({ ...prev, [mediaId]: "busy" }));
+      const node = product.media.nodes.find((n) => n.id === mediaId);
+      const originalUrl = node?.image?.url ?? null;
 
       try {
         const formData = new FormData();
@@ -150,12 +158,11 @@ function Extension() {
         if (aspectRatio) formData.append("aspect", aspectRatio);
         if (resolution) formData.append("resolution", resolution);
         if (presenter) formData.append("presenterId", presenter);
-        // Helper overrides — backend treats any non-reserved field as a helper.
         for (const [name, val] of Object.entries(helperValues)) {
           if (val) formData.append(name, val);
         }
 
-        const res = await fetch(`${BACKEND_URL}/api/enhance`, {
+        const res = await fetch(`${BACKEND_URL}/api/render`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
@@ -164,25 +171,96 @@ function Extension() {
         try { json = await res.json(); } catch { json = null; }
 
         if (!res.ok || !json?.ok) {
-          setStatusByMedia((prev) => ({ ...prev, [mediaId]: "error" }));
-          setErrorByMedia((prev) => ({
-            ...prev,
-            [mediaId]: json?.error || `HTTP ${res.status}`,
-          }));
+          results[mediaId] = {
+            originalUrl,
+            error: json?.error || `HTTP ${res.status}`,
+          };
         } else {
-          setStatusByMedia((prev) => ({ ...prev, [mediaId]: "done" }));
+          results[mediaId] = {
+            originalUrl,
+            renderedDataUrl: json.renderedDataUrl,
+          };
         }
       } catch (err) {
-        setStatusByMedia((prev) => ({ ...prev, [mediaId]: "error" }));
-        setErrorByMedia((prev) => ({
-          ...prev,
-          [mediaId]: err?.message || String(err),
-        }));
+        results[mediaId] = {
+          originalUrl,
+          error: err?.message || String(err),
+        };
       }
+
+      // Update state incrementally so the user sees progress.
+      setRenderResults({ ...results });
     }
 
-    setOverallBusy(false);
-    setOverallDone(true);
+    setPhase("review");
+  };
+
+  // Phase 2: user clicked Replace on one (or all) of the previewed renders.
+  const handleReplace = async (mediaId) => {
+    const result = renderResults[mediaId];
+    if (!result?.renderedDataUrl) return;
+
+    setReplaceStatus((prev) => ({
+      ...prev,
+      [mediaId]: { state: "busy" },
+    }));
+
+    try {
+      const token = await shopify.auth.idToken();
+      const formData = new FormData();
+      formData.append("productId", productId);
+      formData.append("mediaId", mediaId);
+      formData.append("renderedDataUrl", result.renderedDataUrl);
+
+      const res = await fetch(`${BACKEND_URL}/api/replace`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      let json = null;
+      try { json = await res.json(); } catch { json = null; }
+
+      if (!res.ok || !json?.ok) {
+        setReplaceStatus((prev) => ({
+          ...prev,
+          [mediaId]: {
+            state: "error",
+            error: json?.error || `HTTP ${res.status}`,
+          },
+        }));
+      } else {
+        setReplaceStatus((prev) => ({
+          ...prev,
+          [mediaId]: {
+            state: "done",
+            newImageUrl: json.newImageUrl,
+          },
+        }));
+      }
+    } catch (err) {
+      setReplaceStatus((prev) => ({
+        ...prev,
+        [mediaId]: {
+          state: "error",
+          error: err?.message || String(err),
+        },
+      }));
+    }
+  };
+
+  const handleReplaceAll = async () => {
+    const ids = Object.keys(renderResults).filter(
+      (id) => renderResults[id].renderedDataUrl && replaceStatus[id]?.state !== "done",
+    );
+    for (const id of ids) {
+      await handleReplace(id);
+    }
+  };
+
+  const handleBackToSelect = () => {
+    setPhase("select");
+    setRenderResults({});
+    setReplaceStatus({});
   };
 
   if (!productId) {
@@ -275,11 +353,20 @@ function Extension() {
   const selectedCount = selectedIds.size;
   const totalCount = product.media.nodes.length;
   const allSelected = selectedCount === totalCount && totalCount > 0;
-  const doneCount = Object.values(statusByMedia).filter((s) => s === "done").length;
-  const errorCount = Object.values(statusByMedia).filter((s) => s === "error").length;
 
-  const enhanceLabel = overallBusy
-    ? `${i18n.translate("enhancing")} (${doneCount + errorCount}/${selectedCount})`
+  const renderingBusy = phase === "rendering";
+  const renderedCount = Object.values(renderResults).filter(
+    (r) => r.renderedDataUrl,
+  ).length;
+  const reviewIds = Object.keys(renderResults);
+  const anyReplaceBusy = Object.values(replaceStatus).some(
+    (s) => s.state === "busy",
+  );
+
+  const enhanceLabel = renderingBusy
+    ? `${i18n.translate("enhancing")} (${
+        Object.keys(renderResults).length
+      }/${selectedCount})`
     : selectedCount > 1
       ? `${i18n.translate("enhance")} ${selectedCount}`
       : i18n.translate("enhance");
@@ -289,10 +376,148 @@ function Extension() {
       <s-stack direction="block" gap="large-100">
         <s-heading>{product.title}</s-heading>
 
-        {/* IMAGE PICKER */}
-        {!hasImages ? (
+        {/* RENDERING OVERLAY — covers the modal body while Emilia generates. */}
+        {phase === "rendering" && (
+          <s-stack
+            direction="block"
+            gap="base"
+            alignItems="center"
+            justifyContent="center"
+            padding="large-100"
+          >
+            <s-thumbnail
+              src={`${BACKEND_URL}/emilia-logo.png`}
+              alt="Emilia AI Studio"
+              size="large"
+            />
+            <s-heading>{i18n.translate("rendering_heading")}</s-heading>
+            <s-text tone="subdued">
+              {i18n.translate("rendering_progress")
+                .replace("{done}", Object.keys(renderResults).length)
+                .replace("{total}", selectedCount)}
+            </s-text>
+            <s-text tone="subdued">{i18n.translate("rendering_wait")}</s-text>
+          </s-stack>
+        )}
+
+        {/* REVIEW PHASE — show original vs new, per image, with Replace btn. */}
+        {phase === "review" && (
+          <s-stack direction="block" gap="base">
+            <s-stack
+              direction="inline"
+              gap="base"
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <s-text type="strong">{i18n.translate("review_heading")}</s-text>
+              {reviewIds.filter(
+                (id) =>
+                  renderResults[id].renderedDataUrl &&
+                  replaceStatus[id]?.state !== "done",
+              ).length > 1 && (
+                <s-button
+                  onClick={handleReplaceAll}
+                  disabled={anyReplaceBusy}
+                >
+                  {i18n.translate("replace_all")}
+                </s-button>
+              )}
+            </s-stack>
+
+            <s-stack direction="block" gap="base">
+              {reviewIds.map((id) => {
+                const r = renderResults[id];
+                const rs = replaceStatus[id] || { state: "idle" };
+                return (
+                  <s-stack
+                    key={id}
+                    direction="block"
+                    gap="small-200"
+                    padding="small-200"
+                    border="base"
+                    borderRadius="base"
+                    borderColor="subdued"
+                  >
+                    {r.error ? (
+                      <s-text tone="critical">
+                        {i18n.translate("failed")} {r.error}
+                      </s-text>
+                    ) : (
+                      <s-stack
+                        direction="inline"
+                        gap="base"
+                        alignItems="center"
+                      >
+                        <s-stack
+                          direction="block"
+                          gap="extra-tight"
+                          alignItems="center"
+                        >
+                          <s-text tone="subdued">
+                            {i18n.translate("before")}
+                          </s-text>
+                          {r.originalUrl && (
+                            <s-thumbnail
+                              src={r.originalUrl}
+                              alt=""
+                              size="base"
+                            />
+                          )}
+                        </s-stack>
+                        <s-text>→</s-text>
+                        <s-stack
+                          direction="block"
+                          gap="extra-tight"
+                          alignItems="center"
+                        >
+                          <s-text tone="subdued">
+                            {i18n.translate("after")}
+                          </s-text>
+                          <s-thumbnail
+                            src={rs.newImageUrl || r.renderedDataUrl}
+                            alt=""
+                            size="base"
+                          />
+                        </s-stack>
+                        <s-stack
+                          direction="block"
+                          gap="extra-tight"
+                          alignItems="center"
+                        >
+                          {rs.state === "done" ? (
+                            <s-badge tone="success">
+                              ✓ {i18n.translate("replaced")}
+                            </s-badge>
+                          ) : (
+                            <s-button
+                              onClick={() => handleReplace(id)}
+                              disabled={rs.state === "busy"}
+                              variant="primary"
+                            >
+                              {rs.state === "busy"
+                                ? i18n.translate("replacing")
+                                : i18n.translate("replace_btn")}
+                            </s-button>
+                          )}
+                          {rs.state === "error" && (
+                            <s-text tone="critical">{rs.error}</s-text>
+                          )}
+                        </s-stack>
+                      </s-stack>
+                    )}
+                  </s-stack>
+                );
+              })}
+            </s-stack>
+          </s-stack>
+        )}
+
+        {/* SELECT PHASE — original picker + options. */}
+        {phase === "select" && !hasImages && (
           <s-text tone="subdued">{i18n.translate("no_images")}</s-text>
-        ) : (
+        )}
+
+        {phase === "select" && hasImages && (
           <s-stack direction="block" gap="small-200">
             <s-stack
               direction="inline"
@@ -306,7 +531,6 @@ function Extension() {
               <s-button
                 variant="tertiary"
                 onClick={allSelected ? selectNone : selectAll}
-                disabled={overallBusy}
               >
                 {allSelected
                   ? i18n.translate("select_none")
@@ -320,19 +544,15 @@ function Extension() {
             >
               {product.media.nodes.map((node) => {
                 const isSelected = selectedIds.has(node.id);
-                const st = statusByMedia[node.id];
                 return (
                   <s-clickable
                     key={node.id}
-                    onClick={() =>
-                      !overallBusy && toggleSelect(node.id)
-                    }
+                    onClick={() => toggleSelect(node.id)}
                     borderRadius="base"
                     borderColor={isSelected ? "strong" : "subdued"}
                     borderWidth={isSelected ? "large-100" : "small-100"}
                     background={isSelected ? "subdued" : "transparent"}
                     padding="small-100"
-                    disabled={overallBusy}
                   >
                     <s-stack
                       direction="block"
@@ -345,11 +565,8 @@ function Extension() {
                         alt={node.image.altText || ""}
                         size="base"
                       />
-                      {st === "busy" && <s-badge tone="info">…</s-badge>}
-                      {st === "done" && <s-badge tone="success">✓ Done</s-badge>}
-                      {st === "error" && <s-badge tone="critical">! Failed</s-badge>}
-                      {!st && isSelected && (
-                        <s-badge tone="info">✓ Selected</s-badge>
+                      {isSelected && (
+                        <s-badge tone="info">✓ {i18n.translate("selected")}</s-badge>
                       )}
                     </s-stack>
                   </s-clickable>
@@ -359,8 +576,8 @@ function Extension() {
           </s-stack>
         )}
 
-        {/* SETTINGS OVERRIDES */}
-        {hasSyncedConfig && hasImages && (
+        {/* SETTINGS OVERRIDES (only shown during select) */}
+        {phase === "select" && hasSyncedConfig && hasImages && (
           <s-stack direction="block" gap="small-300" paddingBlockStart="large-100">
             <s-stack direction="block" gap="small-100">
               <s-heading>{i18n.translate("options_heading")}</s-heading>
@@ -464,42 +681,33 @@ function Extension() {
           </s-stack>
         )}
 
-        {!hasSyncedConfig && (
+        {phase === "select" && !hasSyncedConfig && (
           <s-text tone="subdued">{i18n.translate("not_synced")}</s-text>
-        )}
-
-        {/* Result line(s) */}
-        {overallDone && doneCount > 0 && (
-          <s-text tone="success">
-            {doneCount === 1
-              ? i18n.translate("success")
-              : `${i18n.translate("success_n").replace("{count}", doneCount)}`}
-          </s-text>
-        )}
-        {overallDone && errorCount > 0 && (
-          <s-stack direction="block" gap="extra-tight">
-            <s-text tone="critical">
-              {`${i18n.translate("failed_n").replace("{count}", errorCount)}`}
-            </s-text>
-            {Object.entries(errorByMedia).map(([mid, msg]) => (
-              <s-text key={mid} tone="critical">• {msg}</s-text>
-            ))}
-          </s-stack>
         )}
       </s-stack>
 
-      <s-button
-        slot="primary-action"
-        disabled={
-          !hasImages || selectedCount === 0 || overallBusy || overallDone
-        }
-        onClick={handleEnhance}
-      >
-        {enhanceLabel}
-      </s-button>
+      {/* PRIMARY action varies by phase */}
+      {phase === "select" && (
+        <s-button
+          slot="primary-action"
+          disabled={!hasImages || selectedCount === 0}
+          onClick={handleRender}
+          variant="primary"
+        >
+          {enhanceLabel}
+        </s-button>
+      )}
+
+      {phase === "review" && (
+        <s-button slot="primary-action" onClick={handleBackToSelect}>
+          {i18n.translate("back_to_select")}
+        </s-button>
+      )}
 
       <s-button slot="secondary-actions" onClick={close}>
-        {overallDone ? i18n.translate("close") : i18n.translate("cancel")}
+        {phase === "review"
+          ? i18n.translate("close")
+          : i18n.translate("cancel")}
       </s-button>
     </s-admin-action>
   );
