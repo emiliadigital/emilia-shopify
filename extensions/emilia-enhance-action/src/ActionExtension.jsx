@@ -14,7 +14,7 @@ import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 // Backend URL — same host the embedded app is served from.
-const BACKEND_URL = "https://shopify.emilia.digital";
+const BACKEND_URL = "https://s-app.emilia.digital";
 
 export default async () => {
   render(<Extension />, document.body);

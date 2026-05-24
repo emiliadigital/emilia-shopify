@@ -13,5 +13,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await db.session.deleteMany({ where: { shop } });
   }
 
+  // Also remove the merchant's saved Emilia settings (API key, defaults, cached
+  // platform config). Belt-and-suspenders — shop/redact also does this 48h
+  // later, but we don't want stale API keys sitting around in the meantime.
+  await db.emiliaShopSettings.deleteMany({ where: { shop } });
+
   return new Response();
 };
