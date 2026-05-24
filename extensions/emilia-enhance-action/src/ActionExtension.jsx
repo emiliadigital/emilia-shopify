@@ -57,6 +57,10 @@ function Extension() {
   // { [mediaId]: { state: 'idle'|'busy'|'done'|'error', newImageUrl?, error? } }
   const [replaceStatus, setReplaceStatus] = useState({});
 
+  // When set, shows a fullscreen image viewer inside the modal.
+  // { src: string, label?: string } | null
+  const [viewer, setViewer] = useState(null);
+
   // Load product + config in parallel
   useEffect(() => {
     if (!productId) return;
@@ -373,31 +377,156 @@ function Extension() {
 
   return (
     <s-admin-action heading={i18n.translate("heading")}>
+      {/* FULLSCREEN VIEWER — covers the whole modal body with a big image
+          when set. Click anywhere to dismiss. */}
+      {viewer && (
+        <>
+          <style>{`
+            .emilia-viewer-overlay {
+              position: fixed;
+              inset: 0;
+              background: rgba(0, 0, 0, 0.85);
+              z-index: 9999;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              cursor: zoom-out;
+              padding: 32px;
+            }
+            .emilia-viewer-img {
+              max-width: 90vw;
+              max-height: 80vh;
+              object-fit: contain;
+              border-radius: 12px;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            }
+            .emilia-viewer-label {
+              color: white;
+              font-size: 14px;
+              margin-top: 16px;
+              opacity: 0.85;
+            }
+            .emilia-viewer-close {
+              position: absolute;
+              top: 24px;
+              right: 24px;
+              background: rgba(255,255,255,0.15);
+              color: white;
+              border: 0;
+              width: 36px;
+              height: 36px;
+              border-radius: 18px;
+              font-size: 18px;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+          `}</style>
+          <div
+            className="emilia-viewer-overlay"
+            onClick={() => setViewer(null)}
+          >
+            <button
+              className="emilia-viewer-close"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewer(null);
+              }}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <img
+              src={viewer.src}
+              alt={viewer.label || ""}
+              className="emilia-viewer-img"
+              onClick={(e) => e.stopPropagation()}
+            />
+            {viewer.label && (
+              <div className="emilia-viewer-label">{viewer.label}</div>
+            )}
+          </div>
+        </>
+      )}
+
       <s-stack direction="block" gap="large-100">
         <s-heading>{product.title}</s-heading>
 
-        {/* RENDERING OVERLAY — covers the modal body while Emilia generates. */}
+        {/* RENDERING OVERLAY — animated spinner ring around the Emilia logo. */}
         {phase === "rendering" && (
-          <s-stack
-            direction="block"
-            gap="base"
-            alignItems="center"
-            justifyContent="center"
-            padding="large-100"
-          >
-            <s-thumbnail
-              src={`${BACKEND_URL}/emilia-logo.png`}
-              alt="Emilia AI Studio"
-              size="large"
-            />
-            <s-heading>{i18n.translate("rendering_heading")}</s-heading>
-            <s-text tone="subdued">
-              {i18n.translate("rendering_progress")
-                .replace("{done}", Object.keys(renderResults).length)
-                .replace("{total}", selectedCount)}
-            </s-text>
-            <s-text tone="subdued">{i18n.translate("rendering_wait")}</s-text>
-          </s-stack>
+          <>
+            <style>{`
+              @keyframes emilia-spin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+              }
+              @keyframes emilia-pulse {
+                0%, 100% { transform: scale(1); }
+                50%      { transform: scale(1.04); }
+              }
+              .emilia-spinner {
+                position: relative;
+                width: 140px;
+                height: 140px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
+              }
+              .emilia-spinner-ring {
+                position: absolute;
+                inset: 0;
+                border: 4px solid rgba(0, 0, 0, 0.08);
+                border-top-color: #00C39A;
+                border-right-color: #00C39A;
+                border-radius: 50%;
+                animation: emilia-spin 1.1s linear infinite;
+              }
+              .emilia-spinner-logo {
+                width: 96px;
+                height: 96px;
+                border-radius: 16px;
+                background: #0E1B2C;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                animation: emilia-pulse 2s ease-in-out infinite;
+              }
+              .emilia-spinner-logo img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+              }
+            `}</style>
+            <s-stack
+              direction="block"
+              gap="base"
+              alignItems="center"
+              justifyContent="center"
+              padding="large-100"
+            >
+              <div className="emilia-spinner">
+                <div className="emilia-spinner-ring"></div>
+                <div className="emilia-spinner-logo">
+                  <img
+                    src={`${BACKEND_URL}/emilia-logo.png`}
+                    alt="Emilia AI Studio"
+                  />
+                </div>
+              </div>
+              <s-heading>{i18n.translate("rendering_heading")}</s-heading>
+              <s-text tone="subdued">
+                {i18n.translate("rendering_progress")
+                  .replace("{done}", Object.keys(renderResults).length)
+                  .replace("{total}", selectedCount)}
+              </s-text>
+              <s-text tone="subdued">{i18n.translate("rendering_wait")}</s-text>
+            </s-stack>
+          </>
         )}
 
         {/* REVIEW PHASE — show original vs new, per image, with Replace btn. */}
@@ -448,6 +577,7 @@ function Extension() {
                         gap="base"
                         alignItems="center"
                       >
+                        {/* Before — click to view fullscreen */}
                         <s-stack
                           direction="block"
                           gap="extra-tight"
@@ -457,14 +587,29 @@ function Extension() {
                             {i18n.translate("before")}
                           </s-text>
                           {r.originalUrl && (
-                            <s-thumbnail
-                              src={r.originalUrl}
-                              alt=""
-                              size="base"
-                            />
+                            <s-clickable
+                              onClick={() =>
+                                setViewer({
+                                  src: r.originalUrl,
+                                  label: i18n.translate("before"),
+                                })
+                              }
+                            >
+                              <s-thumbnail
+                                src={r.originalUrl}
+                                alt={i18n.translate("before")}
+                                size="large-100"
+                              />
+                            </s-clickable>
                           )}
+                          <s-text tone="subdued" type="generic">
+                            {i18n.translate("click_to_view")}
+                          </s-text>
                         </s-stack>
+
                         <s-text>→</s-text>
+
+                        {/* After — click to view fullscreen */}
                         <s-stack
                           direction="block"
                           gap="extra-tight"
@@ -473,12 +618,26 @@ function Extension() {
                           <s-text tone="subdued">
                             {i18n.translate("after")}
                           </s-text>
-                          <s-thumbnail
-                            src={rs.newImageUrl || r.renderedDataUrl}
-                            alt=""
-                            size="base"
-                          />
+                          <s-clickable
+                            onClick={() =>
+                              setViewer({
+                                src: rs.newImageUrl || r.renderedDataUrl,
+                                label: i18n.translate("after"),
+                              })
+                            }
+                          >
+                            <s-thumbnail
+                              src={rs.newImageUrl || r.renderedDataUrl}
+                              alt={i18n.translate("after")}
+                              size="large-100"
+                            />
+                          </s-clickable>
+                          <s-text tone="subdued" type="generic">
+                            {i18n.translate("click_to_view")}
+                          </s-text>
                         </s-stack>
+
+                        {/* Replace button column */}
                         <s-stack
                           direction="block"
                           gap="extra-tight"
