@@ -802,13 +802,13 @@ function PreviewImage({ src, label, onZoom }) {
   return (
     <s-stack direction="block" gap="extra-tight" alignItems="center">
       <s-text tone="subdued">{label}</s-text>
-      <s-clickable onClick={onZoom} borderRadius="base">
+      <s-clickable onClick={onZoom} borderRadius="base" background="subdued">
         <s-image
           src={src}
           alt={label}
           inlineSize="220px"
           aspectRatio="1"
-          objectFit="cover"
+          objectFit="contain"
           borderRadius="base"
         />
       </s-clickable>
