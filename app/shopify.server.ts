@@ -22,7 +22,10 @@ const shopify = shopifyApp({
   sessionStorage: new PrismaSessionStorage(prisma) as any,
   distribution: AppDistribution.AppStore,
   future: {
-    unstable_newEmbeddedAuthStrategy: true,
+    // Disabled: the new Token Exchange strategy interacts poorly with our
+    // PHP-based reverse proxy (response bodies come through empty). The
+    // classic OAuth/bouncer flow works reliably through the proxy.
+    unstable_newEmbeddedAuthStrategy: false,
     expiringOfflineAccessTokens: true,
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
