@@ -42,11 +42,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const settings = await getSettings(session.shop);
 
-  let keyStatus: "missing" | "valid" | "invalid" = "missing";
-  if (settings.apiKey) {
-    const ok = await validateApiKey(settings.apiKey);
-    keyStatus = ok ? "valid" : "invalid";
-  }
+  // NOTE: don't call validateApiKey here. It's an HTTP roundtrip to the
+  // Emilia platform on every page render and pushes PHP-FPM past its
+  // timeout when proxied through Cloudways. The "Test connection" button
+  // and "Sync" button both validate explicitly; that's enough.
+  const keyStatus: "missing" | "present" = settings.apiKey ? "present" : "missing";
 
   return {
     settings: {
@@ -270,11 +270,8 @@ export default function Settings() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            {keyStatus === "invalid" && (
-              <Banner tone="critical" title="API key is invalid or expired">
-                <p>Get a fresh key from your Emilia AI Studio account.</p>
-              </Banner>
-            )}
+            {/* We no longer validate the key on every render — the merchant
+                can use the "Test connection" button if they want to verify. */}
             {testFetcher.data?.ok && (
               <Banner tone="success" title={testFetcher.data.message ?? "OK"} />
             )}
