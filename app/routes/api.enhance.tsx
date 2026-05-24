@@ -104,6 +104,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ? ""
       : presenterRaw || settings.defaultPresenter || "";
 
+  // Any form field that isn't one of the reserved names above is treated as a
+  // helper override (shadow, angle, product_surface, bg_color, etc.). Merges
+  // with the merchant's saved helpers — explicit fields win.
+  const RESERVED_FIELDS = new Set([
+    "productId",
+    "mediaId",
+    "style",
+    "aspect",
+    "resolution",
+    "presenterId",
+  ]);
+  const helperOverrides: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) {
+    if (RESERVED_FIELDS.has(k)) continue;
+    if (typeof v !== "string" || !v) continue;
+    helperOverrides[k] = v;
+  }
+  const mergedHelpers = { ...settings.helpers, ...helperOverrides };
+
   if (!productId || !mediaId) {
     return json({ ok: false, error: "Missing productId or mediaId" }, 400);
   }
@@ -157,7 +176,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         style === "color_backdrop" || style === "studio_gradient"
           ? settings.backdropColor
           : undefined,
-      helpers: settings.helpers,
+      helpers: mergedHelpers,
     });
   } catch (err) {
     const message =

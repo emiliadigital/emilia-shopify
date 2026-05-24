@@ -118,7 +118,10 @@ function Extension() {
       <s-stack direction="block" gap="loose">
         <s-text tone="subdued">{i18n.translate("subhead")}</s-text>
 
-        <s-stack direction="inline" gap="base" inlineWrap>
+        <s-grid
+          gridTemplateColumns="repeat(auto-fill, minmax(120px, 1fr))"
+          gap="base"
+        >
           {mediaList.map((node) => {
             const st = statusByMedia[node.id] || { state: "idle" };
             const displayUrl = st.newUrl || node.image.url;
@@ -127,14 +130,17 @@ function Extension() {
             const isError = st.state === "error";
 
             return (
-              <s-stack key={node.id} direction="block" gap="extra-tight">
-                <s-image
+              <s-stack
+                key={node.id}
+                direction="block"
+                gap="small-200"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <s-thumbnail
                   src={displayUrl}
                   alt={node.image.altText || ""}
-                  inlineSize="110px"
-                  aspectRatio="1"
-                  objectFit="cover"
-                  borderRadius="base"
+                  size="base"
                 />
 
                 {isDone && <s-badge tone="success">{i18n.translate("replaced")}</s-badge>}
@@ -158,7 +164,7 @@ function Extension() {
               </s-stack>
             );
           })}
-        </s-stack>
+        </s-grid>
       </s-stack>
     </s-admin-block>
   );

@@ -56,6 +56,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           aspect_ratios: settings.config.aspect_ratios ?? {},
           resolutions: settings.config.resolutions ?? {},
           modes: settings.config.modes ?? {},
+          // helpers is the per-mode "this style needs these extra options" map
+          // (shadow, angle, surface, etc.) — drives the dynamic helpers UI.
+          helpers: settings.config.helpers ?? {},
         }
       : null,
   };
