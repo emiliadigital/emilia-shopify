@@ -7,13 +7,15 @@ import { login } from "../../shopify.server";
 import styles from "./styles.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Always redirect to /app. The template's stand-alone login form is dead
+  // weight here — embedded-app flow is the only flow we support. Set
+  // explicit no-cache headers so Varnish/CDN never caches this redirect.
   const url = new URL(request.url);
-
-  if (url.searchParams.get("shop")) {
-    throw redirect(`/app?${url.searchParams.toString()}`);
-  }
-
-  return { showForm: Boolean(login) };
+  throw redirect(`/app?${url.searchParams.toString()}`, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    },
+  });
 };
 
 export default function App() {
