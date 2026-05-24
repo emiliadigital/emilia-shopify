@@ -61,21 +61,7 @@ function Extension() {
   // { src: string, label?: string } | null
   const [viewer, setViewer] = useState(null);
 
-  // JS-driven spinner rotation — SVG SMIL and CSS animations get stripped by
-  // the extension sandbox, so we tick a state ourselves via requestAnimationFrame.
-  const [spinDeg, setSpinDeg] = useState(0);
-  useEffect(() => {
-    if (phase !== "rendering") return;
-    let rafId;
-    let start;
-    const tick = (t) => {
-      if (!start) start = t;
-      setSpinDeg((((t - start) * 360) / 1100) % 360);
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [phase]);
+  // (no manual spinner state — using the built-in <s-spinner> component now)
 
   // Load product + config in parallel
   useEffect(() => {
@@ -476,27 +462,10 @@ function Extension() {
               alt="Emilia AI Studio"
               size="large-100"
             />
-            <svg width="40" height="40" viewBox="0 0 40 40">
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                fill="none"
-                stroke="rgba(0,0,0,0.12)"
-                strokeWidth="4"
-              />
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                fill="none"
-                stroke="#00C39A"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeDasharray="40 100"
-                transform={`rotate(${spinDeg - 90} 20 20)`}
-              />
-            </svg>
+            <s-spinner
+              accessibilityLabel={i18n.translate("rendering_heading")}
+              size="large"
+            />
             <s-heading>{i18n.translate("rendering_heading")}</s-heading>
             <s-text tone="subdued">
               {i18n.translate("rendering_progress")
