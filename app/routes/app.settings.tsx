@@ -108,6 +108,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const defaultResolution = String(formData.get("defaultResolution") ?? "2K");
     const backdropColor = String(formData.get("backdropColor") ?? "#FFFFFF");
 
+    // Anything that isn't one of the reserved field names becomes a helper
+    // (shadow, angle, product_surface, bg_color, food_style, etc.). Mirrors
+    // how the action extension submits helpers.
+    const RESERVED = new Set([
+      "intent",
+      "apiKey",
+      "defaultStyle",
+      "defaultPresenter",
+      "defaultAspectRatio",
+      "defaultResolution",
+      "backdropColor",
+    ]);
+    const helpers: Record<string, string> = {};
+    for (const [k, v] of formData.entries()) {
+      if (RESERVED.has(k)) continue;
+      if (typeof v === "string" && v) helpers[k] = v;
+    }
+
     await updateSettings(session.shop, {
       apiKey,
       defaultStyle,
@@ -115,6 +133,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       defaultAspectRatio,
       defaultResolution,
       backdropColor,
+      helpers,
     });
 
     // Auto-sync config when a fresh API key was just saved.
@@ -164,6 +183,9 @@ export default function Settings() {
   const [defaultResolution, setDefaultResolution] = useState(
     settings.defaultResolution,
   );
+  const [helperValues, setHelperValues] = useState<Record<string, string>>(
+    settings.helpers ?? {},
+  );
 
   // Group styles by mode (product / food / jewelry / clothing / furniture /
   // cosmetics). Polaris's Select accepts a mixed array of options and
@@ -201,6 +223,31 @@ export default function Settings() {
       value: k,
     }),
   );
+
+  // Resolve which helpers apply to the currently selected default style.
+  // Same logic as the action extension: find style → mode → helpers in that
+  // mode whose `styles[]` includes the selected style id (or empty = applies
+  // to all in mode).
+  const allStyles = settings.config?.styles ?? [];
+  const effectiveStyleObj = allStyles.find((s) => s.id === defaultStyle);
+  const effectiveMode = effectiveStyleObj?.mode ?? "product";
+  const modeHelpers = settings.config?.helpers?.[effectiveMode] ?? [];
+  const applicableHelpers = modeHelpers.filter((h) => {
+    if (!h || !h.name) return false;
+    // styles may arrive as either a string[] or a CSV string depending on
+    // the platform — handle both.
+    const raw = (h as { styles?: unknown }).styles;
+    let helperStyles: string[];
+    if (Array.isArray(raw)) {
+      helperStyles = raw as string[];
+    } else if (typeof raw === "string") {
+      helperStyles = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    } else {
+      helperStyles = [];
+    }
+    if (helperStyles.length === 0) return true;
+    return helperStyles.includes(defaultStyle);
+  });
 
   const testing = testFetcher.state !== "idle";
   const syncing = syncFetcher.state !== "idle";
@@ -315,6 +362,57 @@ export default function Settings() {
                         onChange={setDefaultStyle}
                       />
                     )}
+
+                    {/* Style-specific helpers (shadow, angle, surface, etc.)
+                        appear when the selected style declares them. Mirrors
+                        the WP plugin's Style Options section. */}
+                    {applicableHelpers.map((helper) => {
+                      const value =
+                        helperValues[helper.name] ?? helper.default ?? "";
+                      const setValue = (v: string) =>
+                        setHelperValues((prev) => ({ ...prev, [helper.name]: v }));
+
+                      if (helper.type === "color") {
+                        // Native HTML color input — Polaris TextField doesn't
+                        // expose a color type. Wrapped with a label that
+                        // matches Polaris's visual treatment.
+                        return (
+                          <div key={helper.name}>
+                            <Text as="p" variant="bodySm" tone="subdued">
+                              {helper.label || helper.name}
+                            </Text>
+                            <input
+                              type="color"
+                              value={value || "#FFFFFF"}
+                              onChange={(e) => setValue(e.currentTarget.value)}
+                              style={{
+                                width: 60,
+                                height: 36,
+                                border: "1px solid #c9cccf",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                                padding: 2,
+                                background: "white",
+                              }}
+                            />
+                          </div>
+                        );
+                      }
+
+                      const helperOptions = Object.entries(
+                        helper.options || {},
+                      ).map(([k, label]) => ({ label, value: k }));
+                      return (
+                        <Select
+                          key={helper.name}
+                          label={helper.label || helper.name}
+                          options={helperOptions}
+                          value={value}
+                          onChange={setValue}
+                        />
+                      );
+                    })}
+
                     {presenterOptions.length > 1 && (
                       <Select
                         label="Default presenter"
@@ -360,6 +458,16 @@ export default function Settings() {
                       defaultAspectRatio,
                       defaultResolution,
                       backdropColor: settings.backdropColor,
+                      // Spread helpers as top-level fields — the action
+                      // treats any non-reserved field as a helper override.
+                      ...Object.fromEntries(
+                        applicableHelpers
+                          .map((h) => [
+                            h.name,
+                            helperValues[h.name] ?? h.default ?? "",
+                          ])
+                          .filter(([, v]) => v !== ""),
+                      ),
                     },
                     { method: "POST" },
                   )

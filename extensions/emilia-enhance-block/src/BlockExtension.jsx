@@ -6,8 +6,8 @@ import "@shopify/ui-extensions/preact";
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-// Same Render URL the embedded app is hosted at.
-const BACKEND_URL = "https://emilia-shopify.onrender.com";
+// Backend URL — same host the embedded app is served from.
+const BACKEND_URL = "https://shopify.emilia.digital";
 
 export default async () => {
   render(<Extension />, document.body);
